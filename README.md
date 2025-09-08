@@ -88,6 +88,7 @@ javascript:(async()=>{ const u='https://raw.githubusercontent.com/Wplace-AutoBot
 - [x] Overlay(you dont need bluemarble anymore)
 - [x] Paint over multiple tiles
 - [x] Multi Account Auto Switcher Via Other Branch ; https://github.com/Wplace-AutoBot/WPlace-AutoBOT/tree/Acc-switch (Ram Efficient LOL)
+- [x] Auto-Image extension
 - [x] AutoCaptcha Solver With Turnstile Token Generator
 - [x] Wider Paint Control Options
 - [x] Advance Color Processing
