@@ -1637,27 +1637,34 @@
     const damagedPixels = [];
     const { width, height, pixels } = state.imageData;
 
-    const ready = await overlayManager.waitForTiles(
-      state.region.x,
-      state.region.y,
-      width,
-      height,
-      state.startPosition.x,
-      state.startPosition.y,
-      state.autonomousMode ? 20000 : 15000
-    );
+    // Check if we're working with restored data - skip tile waiting for restored saves
+    const isRestoredData = state.availableColors && state.availableColors.length > 0 && state.colorsChecked;
+    
+    if (!isRestoredData) {
+      const ready = await overlayManager.waitForTiles(
+        state.region.x,
+        state.region.y,
+        width,
+        height,
+        state.startPosition.x,
+        state.startPosition.y,
+        state.autonomousMode ? 20000 : 15000
+      );
 
-    if (!ready) {
-      Utils.addDebugLog('Failed to load required tiles for scanning', 'error');
-      if (state.autonomousMode) {
-        Utils.addDebugLog('Autonomous mode: will retry scan in 30 seconds', 'warning');
-        setTimeout(() => {
-          if (state.autoRepairEnabled && !state.stopFlag) {
-            scanForDamage();
-          }
-        }, 30000);
+      if (!ready) {
+        Utils.addDebugLog('Failed to load required tiles for scanning', 'error');
+        if (state.autonomousMode) {
+          Utils.addDebugLog('Autonomous mode: will retry scan in 30 seconds', 'warning');
+          setTimeout(() => {
+            if (state.autoRepairEnabled && !state.stopFlag) {
+              scanForDamage();
+            }
+          }, 30000);
+        }
+        return [];
       }
-      return [];
+    } else {
+      Utils.addDebugLog('Using restored data - skipping tile wait for damage scan', 'info');
     }
 
     Utils.addDebugLog(`Scanning ${width}x${height} image for damage (transparent detection: ${state.paintTransparentPixels})...`, 'info');
