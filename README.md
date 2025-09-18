@@ -46,15 +46,15 @@ If you find any, make sure to **disable them**.  [Image](https://i.imgur.com/UtZ
 > <img src="https://i.imgur.com/AbJderX.png" alt="Script Demonstration"/>
 3. Open your Chromium-based browser and go to **Manage Extensions**. 
 > <img src="https://i.imgur.com/yv1Vk7q.png" alt="Script Demonstration"/>
-5. Enable **Developer mode**.
+4. Enable **Developer mode**.
    > Depending on your browser, the option may be located in a slightly different place.
 > <img src="https://i.imgur.com/svqktpY.png" alt="Script Demonstration"/>
-6. Click **Load unpacked**. 
+5. Click **Load unpacked**. 
 > <img src="https://i.imgur.com/NhffCJH.png" alt="Script Demonstration"/>
-8. Select the extracted folder. 
+6. Select the extracted folder. 
 > <img src="https://i.imgur.com/uXlDbfM.png"/>
-10. Visit [wplace.live](https://wplace.live/) and click the extension icon.  
-11. You can now load any of the available scripts (e.g., Auto Image, Auto Repair).
+7. Visit [wplace.live](https://wplace.live/) and click the extension icon.  
+8. You can now load any of the available scripts (e.g., Auto Image, Auto Repair).
 
 For Mobile (Android Only):
 You can use the extension on Android using a browser that supports Chrome extensions, such as Kiwi Browser.
@@ -92,7 +92,7 @@ Follow the exact same steps listed for Chrome above, using Kiwi Browser instead.
 </p>
 
 📋┃To-do
-[x] Making AutoFarm working
+- [ ] Making AutoFarm working
 
 - [ ] Merge both scripts into one
 
