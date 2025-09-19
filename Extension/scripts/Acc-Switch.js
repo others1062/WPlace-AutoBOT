@@ -5412,14 +5412,14 @@
               <div style="display:flex; align-items:center; gap:6px; justify-content:space-between;">
                 <label style="font-size:12px; opacity:.85;">Brush</label>
                 <div style="display:flex; align-items:center; gap:6px;">
-                  <input id="maskBrushSize" type="range" min="1" max="7" step="1" value="1" style="width:120px;">
+                  <input id="maskBrushSize" type="range" min="1" max="255" step="1" value="1" style="width:120px;">
                   <span id="maskBrushSizeValue" style="font-size:12px; opacity:.85; min-width:18px; text-align:center;">1</span>
                 </div>
               </div>
             <div style="display:flex; align-items:center; gap:6px; justify-content:space-between;">
               <label style="font-size:12px; opacity:.85;">Row/col size</label>
               <div style="display:flex; align-items:center; gap:6px;">
-                <input id="rowColSize" type="range" min="1" max="7" step="1" value="1" style="width:120px;">
+                <input id="rowColSize" type="range" min="1" max="255" step="1" value="1" style="width:120px;">
                 <span id="rowColSizeValue" style="font-size:12px; opacity:.85; min-width:18px; text-align:center;">1</span>
               </div>
             </div>
@@ -8609,4 +8609,5 @@
     })
 
 })()
+
 
