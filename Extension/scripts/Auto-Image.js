@@ -824,7 +824,6 @@ function getText(key, params) {
     // Account switching state
     allAccountsInfo: [],
     isFetchingAllAccounts: false,
-    cooldownUsedThisCycle: false,
   };
 
   // Expose state globally for the utils manager and other modules
@@ -5714,10 +5713,13 @@ function getText(key, params) {
               break;
             }
           } else {
-            // Auto-swap workflow: switch to next account or use cooldown
+            // Auto-swap workflow: simplified logic
             console.log('🔄 Auto-swap enabled: checking account switching options');
             
+            // Retrieve fresh accounts list each time to avoid stale data
             const accounts = JSON.parse(localStorage.getItem("accounts")) || [];
+            console.log(`📊 Retrieved ${accounts.length} accounts from localStorage`);
+            
             if (accounts.length <= 1) {
               console.log('📋 Only one account available, using standard cooldown');
               const cooldownResult = await executeCooldownPeriod();
@@ -5729,11 +5731,15 @@ function getText(key, params) {
                 break;
               }
             } else {
+              // Debug current state
+              console.log(`📊 Account Status - Current Index: ${state.accountIndex}, Total: ${accounts.length}`);
+              
               // Check if we're at the last account in the cycle
               const isLastAccount = state.accountIndex >= accounts.length - 1;
+              console.log(`🔍 Is last account? ${isLastAccount} (index ${state.accountIndex} of ${accounts.length - 1})`);
               
               if (!isLastAccount) {
-                // Switch to next account
+                // Switch to next account immediately (no cooldown)
                 console.log(`🔄 Switching to next account (${state.accountIndex + 1}/${accounts.length})`);
                 const switchResult = await switchToNextAccount(accounts);
                 if (!switchResult) {
@@ -5741,38 +5747,30 @@ function getText(key, params) {
                   state.stopFlag = true;
                   break;
                 }
-                // Continue painting with new account (no cooldown, no token regeneration)
+                // Continue painting with new account immediately
                 continue;
               } else {
-                // Last account - check cooldown flag
-                if (!state.cooldownUsedThisCycle) {
-                  // Use cooldown once per cycle
-                  console.log('⏱️ Last account reached, using cooldown period');
-                  state.cooldownUsedThisCycle = true;
-                  
-                  const cooldownResult = await executeCooldownPeriod();
-                  if (cooldownResult === 'stopped') break;
-                  
-                  const tokenResult = await regenerateTokenForNewSession();
-                  if (!tokenResult) {
-                    state.stopFlag = true;
-                    break;
-                  }
-                } else {
-                  // Reset cycle - go back to first account
-                  console.log('🔁 Cooldown already used, resetting to first account');
-                  state.cooldownUsedThisCycle = false;
-                  state.accountIndex = 0;
-                  
-                  const switchResult = await switchToSpecificAccount(accounts[0], 0);
-                  if (!switchResult) {
-                    console.log('❌ Reset to first account failed, stopping');
-                    state.stopFlag = true;
-                    break;
-                  }
-                  // Continue painting with first account
-                  continue;
+                // Last account reached - use cooldown then switch to first account
+                console.log('⏱️ Last account reached, entering cooldown period');
+                console.log(`📊 Current account index: ${state.accountIndex}, Total accounts: ${accounts.length}`);
+                
+                const cooldownResult = await executeCooldownPeriod();
+                if (cooldownResult === 'stopped') break;
+                
+                // After cooldown, switch to first account (index 0)
+                console.log('🔁 Cooldown complete, switching to first account');
+                console.log(`🔄 Before switch - Current index: ${state.accountIndex}, Target: 0`);
+                
+                const switchResult = await switchToSpecificAccount(accounts[0], 0);
+                if (!switchResult) {
+                  console.log('❌ Switch to first account failed, stopping');
+                  state.stopFlag = true;
+                  break;
                 }
+                
+                console.log(`✅ Successfully switched to first account. New index: ${state.accountIndex}`);
+                // Continue painting with first account
+                continue;
               }
             }
           }
@@ -6899,13 +6897,27 @@ function getText(key, params) {
   }
   function swapAccountTrigger(token) {
     localStorage.removeItem("lp");
-    if (!token) return;
-    console.log("Sending token to extension...");
-    window.postMessage({
-      source: 'my-userscript',
-      type: 'setCookie',
-      value: token
-    }, '*');
+    if (!token) {
+      console.error('❌ Cannot swap account: token is null or undefined');
+      return false;
+    }
+    
+    console.log(`🔄 Triggering account swap with token: ${token.substring(0, 20)}...`);
+    console.log('📤 Sending setCookie message to extension...');
+    
+    try {
+      window.postMessage({
+        source: 'my-userscript',
+        type: 'setCookie',
+        value: token
+      }, '*');
+      
+      console.log('✅ setCookie message sent successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to send setCookie message:', error);
+      return false;
+    }
   }
   async function getAccounts() {
     return new Promise((resolve, reject) => {
@@ -7094,11 +7106,12 @@ function getText(key, params) {
 
   // Account switching helper functions
   async function switchToNextAccount(accounts) {
+    const previousIndex = state.accountIndex;
     state.accountIndex = (state.accountIndex + 1) % accounts.length;
-    console.log(`🔄 Switching to account index: ${state.accountIndex}`);
+    console.log(`🔄 Switching from account ${previousIndex + 1} to account ${state.accountIndex + 1} (${state.accountIndex + 1}/${accounts.length})`);
     
     const nextToken = accounts[state.accountIndex];
-    console.log(`🔑 Next token: ${nextToken}`);
+    console.log(`🔑 Next token: ${nextToken ? nextToken.substring(0, 20) + '...' : 'INVALID'}`);
     
     if (!nextToken) {
       console.warn('⚠️ Invalid token, skipping...');
@@ -7109,24 +7122,40 @@ function getText(key, params) {
   }
 
   async function switchToSpecificAccount(token, accountIndex) {
+    console.log(`🔄 Attempting to switch to account at index ${accountIndex}`);
+    console.log(`🔑 Using token: ${token.substring(0, 20)}...`);
+    
     swapAccountTrigger(token);
     
-    let maxRetries = 20;
+    // Give more time for the initial swap to process (like Acc-Switch.js)
+    console.log('⏳ Waiting 5 seconds for initial swap processing...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    let maxRetries = 20; // Match Acc-Switch.js retry count
     let retryCount = 0;
     let swapSuccess = false;
     
     while (!swapSuccess && retryCount < maxRetries) {
       console.log(`⏳ Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
       
+      // Wait for a short period before checking (like Acc-Switch.js)
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       try {
+        // Use the same verification method as Acc-Switch.js
         await fetchAccount();
         console.log('✅ Account swap confirmed.');
         swapSuccess = true;
       } catch (error) {
         console.warn('❌ Account swap not yet successful. Retrying...', error);
         retryCount++;
+        
+        // Re-trigger swap every 5 attempts
+        if (retryCount % 5 === 0) {
+          console.log('🔄 Re-triggering account swap...');
+          swapAccountTrigger(token);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
     }
     
@@ -7138,6 +7167,7 @@ function getText(key, params) {
       state.accountIndex = accountIndex;
       Utils.performSmartSave();
       updateStats();
+      console.log(`✅ Successfully switched to account ${accountIndex + 1} with ${Math.floor(charges)} charges`);
       return true;
     } else {
       console.error('❌ Failed to swap account after multiple retries.');
