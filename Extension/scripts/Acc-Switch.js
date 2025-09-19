@@ -7751,6 +7751,20 @@
             Utils.showAlert("Already fetching account details.", "warning");
             return;
         }
+
+        // Check if bot is running and auto-swap is enabled - prevent refresh during active painting
+        if (state.running && CONFIG.autoSwap) {
+            Utils.showAlert("Cannot refresh accounts while auto-painting is active. Please stop painting first.", "warning");
+            return;
+        }
+
+        // If auto-swap is enabled but not running, check cooldown before allowing refresh
+        if (CONFIG.autoSwap && state.currentCharges < state.cooldownChargeThreshold) {
+            const timeLeft = Utils.formatTime(state.cooldown);
+            Utils.showAlert(`Account switching is on cooldown. Please wait ${timeLeft} before refreshing accounts.`, "warning");
+            return;
+        }
+
         state.isFetchingAllAccounts = true;
 
         const refreshBtn = document.getElementById('refreshAllAccountsBtn');
@@ -7765,6 +7779,9 @@
         }
 
         let originalToken = null;
+        // Store original auto-swap setting and temporarily disable it during refresh
+        const originalAutoSwap = CONFIG.autoSwap;
+        CONFIG.autoSwap = false;
 
         try {
             await getAccounts();
@@ -7781,6 +7798,8 @@
             const accountNames = loadAccountNames();
             for (let i = 0; i < accountsTokens.length; i++) {
                 const token = accountsTokens[i];
+                
+                console.log(`🔄 Refreshing account ${i + 1}/${accountsTokens.length} for data collection only...`);
                 swapAccountTrigger(token);
 
                 let retries = 0;
@@ -7810,7 +7829,13 @@
             console.error("Error fetching all account details:", error);
             if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="color: ${getCurrentTheme().error};">Error loading accounts.</div>`;
         } finally {
-            if (originalToken) swapAccountTrigger(originalToken);
+            // Restore original auto-swap setting
+            CONFIG.autoSwap = originalAutoSwap;
+            
+            if (originalToken) {
+                console.log("🔄 Switching back to original account after data collection...");
+                swapAccountTrigger(originalToken);
+            }
             await Utils.sleep(1000);
 
             // After switching back, update stats and sync the list

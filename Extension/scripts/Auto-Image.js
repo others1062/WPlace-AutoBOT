@@ -3062,9 +3062,10 @@ function getText(key, params) {
       }
     }
     if (statsContainer && statsBtn) {
-      // Stats container starts hidden - user clicks button to show
-      statsBtn.innerHTML = '<i class="fas fa-chart-bar"></i>';
-      statsBtn.title = Utils.t('showStats');
+      // Stats container starts visible by default - user clicks button to hide
+      statsContainer.style.display = 'block';
+      statsBtn.innerHTML = '<i class="fas fa-chart-line"></i>';
+      statsBtn.title = Utils.t('hideStats');
     }
 
     const settingsBtn = container.querySelector('#settingsBtn');
@@ -6896,6 +6897,13 @@ function getText(key, params) {
     }
   }
   function swapAccountTrigger(token) {
+    // STRICT GUARD: Only allow account switching during active painting sessions OR controlled refresh
+    if (!state.running && !state.isFetchingAllAccounts) {
+      console.warn('🔒 Account switching blocked - only allowed during active painting or controlled refresh');
+      console.warn('🔒 Current state.running:', state.running, 'state.isFetchingAllAccounts:', state.isFetchingAllAccounts);
+      return false;
+    }
+    
     localStorage.removeItem("lp");
     if (!token) {
       console.error('❌ Cannot swap account: token is null or undefined');
@@ -6957,6 +6965,7 @@ function getText(key, params) {
       Utils.showAlert("Already fetching account details.", "warning");
       return;
     }
+    
     state.isFetchingAllAccounts = true;
 
     const refreshBtn = document.getElementById('refreshAllAccountsBtn');
@@ -6967,10 +6976,11 @@ function getText(key, params) {
 
     const accountsListArea = document.getElementById('accountsListArea');
     if (accountsListArea) {
-      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">Initializing...</div>`;
+      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">Fetching account details...</div>`;
     }
 
     let originalToken = null;
+    let originalAccountData = null;
 
     try {
       await getAccounts();
@@ -6980,54 +6990,136 @@ function getText(key, params) {
         return;
       }
 
-      const { id: originalId } = await WPlaceService.getCharges();
+      // Store original account info to switch back later
+      originalAccountData = await WPlaceService.getCharges();
+      originalToken = accountsTokens.find(token => {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          return payload.userId === originalAccountData.id;
+        } catch (e) {
+          return false;
+        }
+      });
+
       state.allAccountsInfo = [];
       renderAccountsList();
 
+      // Temporarily disable the strict guard for controlled refresh operation
+      const originalRunningState = state.running;
+      state.running = true; // Temporarily enable to allow controlled switching
+      
+      console.log('🔓 Temporarily enabling controlled account switching for refresh');
+
       for (let i = 0; i < accountsTokens.length; i++) {
         const token = accountsTokens[i];
-        swapAccountTrigger(token);
+        
+        console.log(`📋 Fetching details for account ${i + 1}/${accountsTokens.length}`);
+        
+        // Controlled account switch for data fetching
+        const swapResult = swapAccountTrigger(token);
+        if (!swapResult) {
+          console.warn(`⚠️ Failed to trigger swap for account ${i + 1}`);
+          continue;
+        }
 
+        // Wait for account switch to complete
         let retries = 0;
-        let swapped = false;
-        let fetchedInfo = null;
-        while (retries < 5 && !swapped) {
+        let accountData = null;
+        while (retries < 8 && !accountData) {
           await Utils.sleep(1000);
           try {
-            fetchedInfo = await WPlaceService.fetchCheck();
-            if (fetchedInfo.ID) swapped = true;
-          } catch (e) { retries++; }
+            const fetchedInfo = await WPlaceService.fetchCheck();
+            const chargesInfo = await WPlaceService.getCharges();
+            if (fetchedInfo.ID) {
+              accountData = {
+                ...fetchedInfo,
+                Charges: Math.floor(chargesInfo.charges),
+                Max: Math.floor(chargesInfo.max),
+                Droplets: Math.floor(chargesInfo.droplets)
+              };
+            }
+          } catch (e) {
+            retries++;
+            console.warn(`⚠️ Retry ${retries}/8 for account ${i + 1}`);
+          }
         }
 
-        if (swapped) {
-          await fetchAccount();
-          const actualName = fetchedInfo.Username || `User${fetchedInfo.ID}` || `Account ${i + 1}`;
-          if (fetchedInfo.ID === originalId) originalToken = token;
-          state.allAccountsInfo.push({ ...fetchedInfo, token, displayName: actualName, isCurrent: fetchedInfo.ID === originalId });
+        if (accountData) {
+          const actualName = accountData.Username || accountData.name || `User${accountData.ID}`;
+          const isCurrentAccount = accountData.ID === originalAccountData.id;
+          
+          state.allAccountsInfo.push({
+            ...accountData,
+            token,
+            displayName: actualName,
+            isCurrent: isCurrentAccount
+          });
+          
+          console.log(`✅ Fetched details for: ${actualName} (${accountData.Charges}/${accountData.Max} charges)`);
         } else {
+          // Fallback for failed accounts
           const fallbackName = `Account ${i + 1}`;
-          state.allAccountsInfo.push({ token, ID: `...${token.slice(-4)}`, displayName: fallbackName, error: 'Failed to fetch' });
+          state.allAccountsInfo.push({
+            token,
+            ID: `...${token.slice(-4)}`,
+            displayName: fallbackName,
+            isCurrent: false,
+            error: 'Failed to fetch details'
+          });
+          console.warn(`❌ Failed to fetch details for account ${i + 1}`);
         }
+        
         renderAccountsList();
       }
+
+      // Restore original state and switch back to original account
+      state.running = originalRunningState;
+      console.log('🔒 Restored original running state and switching back to original account');
+      
     } catch (error) {
       console.error("Error fetching all account details:", error);
       if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="color: red;">Error loading accounts.</div>`;
     } finally {
-      if (originalToken) swapAccountTrigger(originalToken);
-      await Utils.sleep(1000);
-
-      // After switching back, update stats and sync the list
-      const meData = await WPlaceService.getCharges();
-      state.currentCharges = Math.floor(meData.charges);
-      state.cooldown = meData.cooldown;
-      state.maxCharges = Math.floor(meData.max) > 1 ? Math.floor(meData.max) : state.maxCharges;
-      const currentAccountInList = state.allAccountsInfo.find(acc => acc.ID === meData.id);
-      if (currentAccountInList) {
-        currentAccountInList.Charges = state.currentCharges;
-        currentAccountInList.Max = state.maxCharges;
-        currentAccountInList.Droplets = meData.droplets;
+      // Switch back to original account
+      if (originalToken) {
+        console.log('🔄 Switching back to original account...');
+        const originalRunningState = state.running;
+        state.running = true; // Temporarily enable for switch back
+        
+        swapAccountTrigger(originalToken);
+        await Utils.sleep(2000);
+        
+        // Verify we're back on the original account
+        try {
+          const verifyData = await WPlaceService.getCharges();
+          if (verifyData.id === originalAccountData.id) {
+            console.log('✅ Successfully switched back to original account');
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not verify switch back to original account');
+        }
+        
+        state.running = originalRunningState; // Restore state
       }
+
+      // Update current account info in the list
+      if (originalAccountData) {
+        const currentAccountInList = state.allAccountsInfo.find(acc => acc.ID === originalAccountData.id);
+        if (currentAccountInList) {
+          currentAccountInList.isCurrent = true;
+          currentAccountInList.Charges = Math.floor(originalAccountData.charges);
+          currentAccountInList.Max = Math.floor(originalAccountData.max);
+          currentAccountInList.Droplets = Math.floor(originalAccountData.droplets);
+        }
+      }
+
+      // Sort accounts to place current account first
+      state.allAccountsInfo.sort((a, b) => {
+        if (a.isCurrent && !b.isCurrent) return -1;
+        if (!a.isCurrent && b.isCurrent) return 1;
+        return 0;
+      });
+
       await updateStats();
       renderAccountsList();
 
@@ -7036,6 +7128,8 @@ function getText(key, params) {
         refreshBtn.innerHTML = '<i class="fas fa-users-cog"></i>';
         refreshBtn.disabled = false;
       }
+      
+      console.log('✅ Account list refresh completed with full details');
     }
   }
 
@@ -7050,6 +7144,45 @@ function getText(key, params) {
       currentAccountInList.Max = state.maxCharges;
       // Re-render the account list to show updated charges
       renderAccountsList();
+    }
+  }
+
+  // Function to update current account spotlight when switching during painting
+  async function updateCurrentAccountSpotlight() {
+    if (state.allAccountsInfo.length === 0) return;
+    
+    try {
+      // Get current account info
+      const currentAccountData = await WPlaceService.getCharges();
+      const currentAccountInfo = await WPlaceService.fetchCheck();
+      
+      // Update all accounts to not be current
+      state.allAccountsInfo.forEach(acc => acc.isCurrent = false);
+      
+      // Find and mark the new current account
+      const newCurrentAccount = state.allAccountsInfo.find(acc => acc.ID === currentAccountData.id);
+      if (newCurrentAccount) {
+        newCurrentAccount.isCurrent = true;
+        newCurrentAccount.Charges = Math.floor(currentAccountData.charges);
+        newCurrentAccount.Max = Math.floor(currentAccountData.max);
+        newCurrentAccount.Droplets = Math.floor(currentAccountData.droplets);
+        newCurrentAccount.displayName = currentAccountInfo.Username || currentAccountInfo.name || newCurrentAccount.displayName;
+        
+        console.log(`🎯 Updated current account spotlight: ${newCurrentAccount.displayName}`);
+      }
+      
+      // Sort to place current account first
+      state.allAccountsInfo.sort((a, b) => {
+        if (a.isCurrent && !b.isCurrent) return -1;
+        if (!a.isCurrent && b.isCurrent) return 1;
+        return 0;
+      });
+      
+      // Re-render the account list to show new current account
+      renderAccountsList();
+      
+    } catch (error) {
+      console.warn('⚠️ Failed to update account spotlight:', error);
     }
   }
 
@@ -7108,7 +7241,16 @@ function getText(key, params) {
   async function switchToNextAccount(accounts) {
     const previousIndex = state.accountIndex;
     state.accountIndex = (state.accountIndex + 1) % accounts.length;
-    console.log(`🔄 Switching from account ${previousIndex + 1} to account ${state.accountIndex + 1} (${state.accountIndex + 1}/${accounts.length})`);
+    
+    // Get account names for better logging
+    const prevAccountInfo = state.allAccountsInfo && state.allAccountsInfo[previousIndex] 
+      ? state.allAccountsInfo[previousIndex].displayName 
+      : `Account ${previousIndex + 1}`;
+    const nextAccountInfo = state.allAccountsInfo && state.allAccountsInfo[state.accountIndex] 
+      ? state.allAccountsInfo[state.accountIndex].displayName 
+      : `Account ${state.accountIndex + 1}`;
+    
+    console.log(`🔄 Switching from account ${previousIndex + 1} (${prevAccountInfo}) to account ${state.accountIndex + 1} (${nextAccountInfo}) (${state.accountIndex + 1}/${accounts.length})`);
     
     const nextToken = accounts[state.accountIndex];
     console.log(`🔑 Next token: ${nextToken ? nextToken.substring(0, 20) + '...' : 'INVALID'}`);
@@ -7122,7 +7264,12 @@ function getText(key, params) {
   }
 
   async function switchToSpecificAccount(token, accountIndex) {
-    console.log(`🔄 Attempting to switch to account at index ${accountIndex}`);
+    // Get account name for better logging
+    const accountInfo = state.allAccountsInfo && state.allAccountsInfo[accountIndex] 
+      ? state.allAccountsInfo[accountIndex].displayName 
+      : `Account ${accountIndex + 1}`;
+    
+    console.log(`🔄 Attempting to switch to account at index ${accountIndex} (${accountInfo})`);
     console.log(`🔑 Using token: ${token.substring(0, 20)}...`);
     
     swapAccountTrigger(token);
@@ -7167,10 +7314,14 @@ function getText(key, params) {
       state.accountIndex = accountIndex;
       Utils.performSmartSave();
       updateStats();
-      console.log(`✅ Successfully switched to account ${accountIndex + 1} with ${Math.floor(charges)} charges`);
+      
+      // Update account list spotlight to show new current account
+      await updateCurrentAccountSpotlight();
+      
+      console.log(`✅ Successfully switched to account ${accountIndex + 1} (${accountInfo}) with ${Math.floor(charges)} charges`);
       return true;
     } else {
-      console.error('❌ Failed to swap account after multiple retries.');
+      console.error(`❌ Failed to swap to account ${accountIndex + 1} (${accountInfo}) after multiple retries.`);
       return false;
     }
   }
@@ -7219,6 +7370,12 @@ function getText(key, params) {
   waitForDependenciesAndInitialize().then(() => {
     // Generate token automatically after UI is ready
     setTimeout(initializeTokenGenerator, 1000);
+
+    // Auto-refresh account list on startup
+    setTimeout(() => {
+      console.log('🔄 Auto-refreshing account list on startup...');
+      fetchAllAccountDetails();
+    }, 2000);
 
     // Attach advanced color matching listeners (resize dialog)
     const advancedInit = () => {
