@@ -206,12 +206,12 @@
   position: fixed;
   top: 20px;
   left: 20px;
-  width: 280px;
+  width: 340px;
   max-height: calc(100vh - 40px);
   padding: 0;
   z-index: 9998;
   animation: slide-in 0.4s ease-out;
-  overflow: hidden auto;
+  overflow: hidden;
   transition: all 0.3s ease;
   user-select: none;
 
@@ -233,21 +233,21 @@
 }
 
 #wplace-image-bot-container.wplace-compact {
-  width: 240px;
+  width: 300px;
 }
 
 #wplace-image-bot-container.wplace-minimized {
-  width: 200px;
+  width: 260px;
   height: auto;
   overflow: hidden;
 }
 
-/* Stats container sits to the right of main (280 + 30 = 330) */
+/* Stats container sits to the right of main (340 + 30 = 370) */
 #wplace-stats-container {
   position: fixed;
   top: 20px;
-  left: 310px;
-  width: 230px;
+  left: 370px;
+  width: 300px;
   max-height: calc(100vh - 40px);
   padding: 0;
   z-index: 9997;
@@ -2080,4 +2080,81 @@
 
 .wplace-account-placeholder i {
   color: var(--wplace-warning);
+}
+
+/* ===================================== */
+/* Hide browser default spinner buttons  */
+/* ===================================== */
+
+/* Hide spinner buttons for all number inputs in the extension */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox support */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Specifically target extension number inputs */
+.wplace-settings-number-input::-webkit-outer-spin-button,
+.wplace-settings-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wplace-settings-number-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Hide spinners on batch control inputs */
+.wplace-random-batch-grid input[type="number"]::-webkit-outer-spin-button,
+.wplace-random-batch-grid input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wplace-random-batch-grid input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Hide spinners on block size inputs */
+.wplace-block-size-grid input[type="number"]::-webkit-outer-spin-button,
+.wplace-block-size-grid input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wplace-block-size-grid input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Hide spinners on threshold inputs */
+.resize-threshold-input::-webkit-outer-spin-button,
+.resize-threshold-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.resize-threshold-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Hide spinners on notification interval inputs */
+.wplace-notification-interval-input::-webkit-outer-spin-button,
+.wplace-notification-interval-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wplace-notification-interval-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }

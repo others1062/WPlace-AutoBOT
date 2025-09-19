@@ -761,6 +761,7 @@ function getText(key, params) {
     processing: false,
     totalPixels: 0,
     paintedPixels: 0,
+    preFilteringDone: false, // Track if pre-filtering detection has been done this session
     availableColors: [],
     activeColorPalette: [], // User-selected colors for conversion
     paintWhitePixels: true, // Default to ON
@@ -819,7 +820,11 @@ function getText(key, params) {
     _lastSaveTime: 0,
     _saveInProgress: false,
     paintedMap: null,
-    accountIndex: -1,
+    accountIndex: 0,
+    // Account switching state
+    allAccountsInfo: [],
+    isFetchingAllAccounts: false,
+    cooldownUsedThisCycle: false,
   };
 
   // Expose state globally for the utils manager and other modules
@@ -913,10 +918,7 @@ function getText(key, params) {
       const response = await originalFetch.apply(this, args);
       const url = args[0] instanceof Request ? args[0].url : args[0];
 
-      // Debug: Log ALL tile requests to see if fetch interception is working
-      if (typeof url === 'string' && url.includes('.png') && url.match(/\/\d+\/\d+\.png/)) {
-        console.log(`🔍 TILE REQUEST: ${url} at ${Date.now()}`);
-      }
+      // TILE REQUEST logging removed to reduce console spam
 
       if (typeof url === 'string') {
         if (url.includes('https://backend.wplace.live/s0/pixel/')) {
@@ -1417,6 +1419,7 @@ function getText(key, params) {
         const data = await res.json()
         return {
           ID: data.id,
+          Username: data.username || data.name || null,
           Charges: data.charges.count,
           Max: data.charges.max,
           Droplets: data.droplets
@@ -1694,12 +1697,16 @@ function getText(key, params) {
       ?.addEventListener('click', () => unselectAllPaidColors());
   }
 
-  async function handleCaptcha() {
+  async function handleCaptcha(allowGeneration = true) {
     const startTime = performance.now();
 
     // Check user's token source preference
     if (state.tokenSource === 'manual') {
       console.log('🎯 Manual token source selected - using pixel placement automation');
+      if (!allowGeneration) {
+        console.log('❌ Token generation disabled during processing');
+        return null;
+      }
       return await tokenManager.handleCaptchaFallback();
     }
 
@@ -1741,8 +1748,12 @@ function getText(key, params) {
         console.log('♻️ Using existing cached token (from previous operation)');
         token = getTurnstileToken();
       }
-      // ✅ Otherwise generate a new one
+      // ✅ Otherwise generate a new one (only if allowed)
       else {
+        if (!allowGeneration) {
+          console.log('❌ Token expired/missing but generation disabled during processing');
+          return null;
+        }
         console.log('🔐 No valid pre-generated or cached token, creating new one...');
         token = await Utils.executeTurnstile(sitekey, 'paint');
         if (token) {
@@ -2092,6 +2103,32 @@ function getText(key, params) {
       'initMessage'
     )}</div>
             </div>
+          </div>
+        </div>
+        
+        <div class="wplace-section" id="account-swapper-section">
+          <div class="wplace-section-title" style="justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-sync-alt"></i>
+              <span>Account Swapper</span>
+            </div>
+            <label class="wplace-switch">
+              <input type="checkbox" id="autoSwapToggle">
+              <span class="wplace-slider-round"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="wplace-section" id="all-accounts-section">
+          <div class="wplace-section-title">
+            <i class="fas fa-users"></i>
+            <span>All Accounts</span>
+            <button id="refreshAllAccountsBtn" class="wplace-header-btn" title="Refresh all accounts">
+              <i class="fas fa-users-cog"></i>
+            </button>
+          </div>
+          <div id="accountsListArea" class="accounts-list-container">
+            <div class="wplace-stat-item" style="opacity: 0.5;">Click the <i class="fas fa-users-cog"></i> icon to load accounts.</div>
           </div>
         </div>
       </div>
@@ -3008,6 +3045,22 @@ function getText(key, params) {
           }
         });
       }
+
+      // Account-related event handlers
+      const autoSwapToggle = statsContainer.querySelector('#autoSwapToggle');
+      const refreshAllAccountsBtn = statsContainer.querySelector('#refreshAllAccountsBtn');
+
+      if (autoSwapToggle) {
+        autoSwapToggle.checked = CONFIG.autoSwap;
+        autoSwapToggle.addEventListener('change', (e) => {
+          CONFIG.autoSwap = e.target.checked;
+          console.log(`🔄 Auto-swap ${CONFIG.autoSwap ? 'enabled' : 'disabled'}`);
+        });
+      }
+
+      if (refreshAllAccountsBtn) {
+        refreshAllAccountsBtn.addEventListener('click', fetchAllAccountDetails);
+      }
     }
     if (statsContainer && statsBtn) {
       // Stats container starts hidden - user clicks button to show
@@ -3775,16 +3828,67 @@ function getText(key, params) {
         cooldownInput.max = state.maxCharges;
       }
 
+      // Update current account charges in the account list
+      updateCurrentAccountInList();
+
       let imageStatsHTML = '';
       if (state.imageLoaded) {
         const progress =
           state.totalPixels > 0 ? Math.round((state.paintedPixels / state.totalPixels) * 100) : 0;
         const remainingPixels = state.totalPixels - state.paintedPixels;
-        state.estimatedTime = Utils.calculateEstimatedTime(
-          remainingPixels,
-          state.displayCharges,
-          state.cooldown
-        );
+        
+        // Updated estimation calculation for new cooldown logic
+        // Now we wait for cooldownChargeThreshold before processing pixels
+        
+        // Calculate batch size (with fallback if function not yet defined)
+        let batchSize;
+        try {
+          batchSize = typeof calculateBatchSize === 'function' ? calculateBatchSize() : state.paintingSpeed || 5;
+        } catch (e) {
+          batchSize = state.paintingSpeed || 5;
+        }
+        
+        // Ensure batchSize is valid and not zero
+        batchSize = Math.max(1, Math.min(batchSize, remainingPixels));
+        const batchesNeeded = Math.ceil(remainingPixels / batchSize);
+        
+        // Calculate time accounting for cooldown threshold behavior with safety checks
+        let estimatedMs = 0;
+        if (remainingPixels > 0 && Number.isFinite(state.cooldown) && state.cooldown > 0) {
+          // Current charges available check
+          const currentCharges = Math.max(0, state.displayCharges);
+          const thresholdCharges = Math.max(1, state.cooldownChargeThreshold || 1);
+          
+          if (currentCharges < thresholdCharges) {
+            // Need to wait for charges to reach threshold first
+            const chargesNeeded = thresholdCharges - currentCharges;
+            estimatedMs += chargesNeeded * state.cooldown;
+          }
+          
+          // Calculate painting time more accurately
+          // Each batch uses thresholdCharges, so calculate how many cycles we need
+          const pixelsPerCycle = Math.min(batchSize, thresholdCharges);
+          const cyclesNeeded = Math.ceil(remainingPixels / pixelsPerCycle);
+          
+          // Time between cycles (waiting for charges to regenerate)
+          if (cyclesNeeded > 1) {
+            const regenerationTime = (cyclesNeeded - 1) * thresholdCharges * state.cooldown;
+            estimatedMs += regenerationTime;
+          }
+          
+          // Add painting speed delay if enabled
+          if (CONFIG.PAINTING_SPEED_ENABLED && state.paintingSpeed > 0) {
+            const paintingDelay = remainingPixels * (1000 / state.paintingSpeed);
+            estimatedMs += paintingDelay;
+          }
+        }
+        
+        // Safety check to prevent infinity or invalid values
+        if (!Number.isFinite(estimatedMs) || estimatedMs < 0) {
+          estimatedMs = 0;
+        }
+        
+        state.estimatedTime = estimatedMs;
         progressBar.style.width = `${progress}%`;
 
         imageStatsHTML = `
@@ -3797,12 +3901,6 @@ function getText(key, params) {
           'pixels'
         )}</div>
             <div class="wplace-stat-value">${state.paintedPixels}/${state.totalPixels}</div>
-          </div>
-          <div class="wplace-stat-item">
-            <div class="wplace-stat-label"><i class="fas fa-clock"></i> ${Utils.t(
-          'estimatedTime'
-        )}</div>
-            <div class="wplace-stat-value">${Utils.formatTime(state.estimatedTime)}</div>
           </div>
         `;
       }
@@ -3842,8 +3940,26 @@ function getText(key, params) {
           .join('');
       }
 
+      // Calculate multi-account statistics
+      let totalAllCharges = 0;
+      let totalMaxCharges = 0;
+      if (state.allAccountsInfo.length > 0) {
+        totalAllCharges = state.allAccountsInfo.reduce((sum, acc) => sum + Math.floor(acc.Charges || 0), 0);
+        totalMaxCharges = state.allAccountsInfo.reduce((sum, acc) => sum + Math.floor(acc.Max || 0), 0);
+      }
+
       statsArea.innerHTML = `
             ${imageStatsHTML}
+            ${state.allAccountsInfo.length > 0 ? `
+            <div class="wplace-stat-item">
+              <div class="wplace-stat-label">
+                <i class="fas fa-coins"></i> Total All Accounts Charges
+              </div>
+              <div class="wplace-stat-value">
+                ${totalAllCharges}/${totalMaxCharges}
+              </div>
+            </div>
+            ` : ''}
             <div class="wplace-stat-item">
               <div class="wplace-stat-label">
                 <i class="fas fa-bolt"></i> ${Utils.t('charges')}
@@ -5186,6 +5302,16 @@ function getText(key, params) {
       await ensureToken();
       if (!getTurnstileToken()) return;
 
+      // Only reset painted pixels on first start of session (when pre-filtering hasn't been done)
+      if (!state.preFilteringDone) {
+        const savedPaintedPixels = state.paintedPixels; // Store original value
+        state.paintedPixels = 0;
+        console.log(`🔄 First start this session - reset progress counter for accurate tracking (was: ${savedPaintedPixels})`);
+        updateStats(); // Update UI to show 0 progress
+      } else {
+        console.log('🔄 Continuing session - pre-filtering already done, keeping current progress');
+      }
+
       state.running = true;
       state.stopFlag = false;
       startBtn.disabled = true;
@@ -5331,7 +5457,7 @@ function getText(key, params) {
     );
   }
 
-  function generateCoordinates(width, height, mode, direction, snake, blockWidth, blockHeight) {
+  function generateCoordinates(width, height, mode, direction, snake, blockWidth, blockHeight, startFromX = 0, startFromY = 0) {
     const coords = [];
     console.log(
       'Generating coordinates with \n  mode:',
@@ -5343,7 +5469,11 @@ function getText(key, params) {
       '\n  blockWidth:',
       blockWidth,
       '\n  blockHeight:',
-      blockHeight
+      blockHeight,
+      '\n  startFromX:',
+      startFromX,
+      '\n  startFromY:',
+      startFromY
     );
     // --------- Standard 4 corners traversal ----------
     let xStart, xEnd, xStep;
@@ -5470,6 +5600,30 @@ function getText(key, params) {
       throw new Error(`Unknown mode: ${mode}`);
     }
 
+    // Filter coordinates to start from the specified position
+    if (startFromX > 0 || startFromY > 0) {
+      console.log(`🔄 Filtering coordinates to resume from position (${startFromX}, ${startFromY})`);
+      let startIndex = -1;
+      
+      // Find the starting position in the coordinate list
+      for (let i = 0; i < coords.length; i++) {
+        const [x, y] = coords[i];
+        if (x === startFromX && y === startFromY) {
+          startIndex = i;
+          break;
+        }
+      }
+      
+      if (startIndex >= 0) {
+        // Resume from the found position (skip all previous coordinates)
+        const filteredCoords = coords.slice(startIndex);
+        console.log(`✂️ Resuming: skipped ${startIndex} coordinates, continuing with ${filteredCoords.length} remaining`);
+        return filteredCoords;
+      } else {
+        console.warn(`⚠️ Resume position (${startFromX}, ${startFromY}) not found in coordinate list, starting from beginning`);
+      }
+    }
+
     return coords;
   }
 
@@ -5490,15 +5644,19 @@ function getText(key, params) {
         state.paintedPixels++;
         Utils.markPixelPainted(p.x, p.y, pixelBatch.regionX, pixelBatch.regionY);
       });
+      
+      // IMPORTANT: Decrement charges locally to match Acc-Switch.js behavior
+      state.displayCharges = Math.max(0, state.displayCharges - batchSize);
+      state.preciseCurrentCharges = Math.max(0, state.preciseCurrentCharges - batchSize);
+      
       state.fullChargeData = {
         ...state.fullChargeData,
         spentSinceShot: state.fullChargeData.spentSinceShot + batchSize,
       };
       updateStats();
-      updateUI('paintingProgress', 'default', {
-        painted: state.paintedPixels,
-        total: state.totalPixels,
-      });
+      // Update account list with new charges
+      updateCurrentAccountInList();
+      // Progress tracking removed from UI to reduce visual clutter
       Utils.performSmartSave();
 
       if (CONFIG.PAINTING_SPEED_ENABLED && state.paintingSpeed > 0 && batchSize > 0) {
@@ -5517,16 +5675,127 @@ function getText(key, params) {
   }
 
   async function processImage() {
+    console.log('🚀 Starting auto-swap enabled painting workflow');
+    
+    try {
+      // Main painting cycle - repeats until image complete or stopped
+      while (!state.stopFlag) {
+        console.log('📋 Phase 1: Starting painting session');
+        const paintingResult = await executePaintingSession();
+        
+        if (paintingResult === 'completed') {
+          console.log('🎉 Image painting completed!');
+          break;
+        }
+        
+        if (paintingResult === 'stopped') {
+          console.log('⏹️ Painting stopped by user');
+          break;
+        }
+        
+        if (paintingResult === 'charges_depleted') {
+          if (!CONFIG.autoSwap) {
+            // Original workflow: cooldown period
+            console.log('⏱️ Phase 2: Entering cooldown period (auto-swap disabled)');
+            const cooldownResult = await executeCooldownPeriod();
+            
+            if (cooldownResult === 'stopped') {
+              console.log('⏹️ Cooldown stopped by user');
+              break;
+            }
+            
+            // Phase 3: Regenerate token for next painting session
+            console.log('🔑 Phase 3: Regenerating token for next session');
+            const tokenResult = await regenerateTokenForNewSession();
+            
+            if (!tokenResult) {
+              console.log('❌ Failed to regenerate token, stopping');
+              state.stopFlag = true;
+              break;
+            }
+          } else {
+            // Auto-swap workflow: switch to next account or use cooldown
+            console.log('🔄 Auto-swap enabled: checking account switching options');
+            
+            const accounts = JSON.parse(localStorage.getItem("accounts")) || [];
+            if (accounts.length <= 1) {
+              console.log('📋 Only one account available, using standard cooldown');
+              const cooldownResult = await executeCooldownPeriod();
+              if (cooldownResult === 'stopped') break;
+              
+              const tokenResult = await regenerateTokenForNewSession();
+              if (!tokenResult) {
+                state.stopFlag = true;
+                break;
+              }
+            } else {
+              // Check if we're at the last account in the cycle
+              const isLastAccount = state.accountIndex >= accounts.length - 1;
+              
+              if (!isLastAccount) {
+                // Switch to next account
+                console.log(`🔄 Switching to next account (${state.accountIndex + 1}/${accounts.length})`);
+                const switchResult = await switchToNextAccount(accounts);
+                if (!switchResult) {
+                  console.log('❌ Account switch failed, stopping');
+                  state.stopFlag = true;
+                  break;
+                }
+                // Continue painting with new account (no cooldown, no token regeneration)
+                continue;
+              } else {
+                // Last account - check cooldown flag
+                if (!state.cooldownUsedThisCycle) {
+                  // Use cooldown once per cycle
+                  console.log('⏱️ Last account reached, using cooldown period');
+                  state.cooldownUsedThisCycle = true;
+                  
+                  const cooldownResult = await executeCooldownPeriod();
+                  if (cooldownResult === 'stopped') break;
+                  
+                  const tokenResult = await regenerateTokenForNewSession();
+                  if (!tokenResult) {
+                    state.stopFlag = true;
+                    break;
+                  }
+                } else {
+                  // Reset cycle - go back to first account
+                  console.log('🔁 Cooldown already used, resetting to first account');
+                  state.cooldownUsedThisCycle = false;
+                  state.accountIndex = 0;
+                  
+                  const switchResult = await switchToSpecificAccount(accounts[0], 0);
+                  if (!switchResult) {
+                    console.log('❌ Reset to first account failed, stopping');
+                    state.stopFlag = true;
+                    break;
+                  }
+                  // Continue painting with first account
+                  continue;
+                }
+              }
+            }
+          }
+        }
+        
+        console.log('🔄 Cycle complete, starting next painting session');
+      }
+    } finally {
+      await finalizePaintingProcess();
+    }
+  }
+
+  // Phase 1: Execute a complete painting session using all available charges
+  async function executePaintingSession() {
+    console.log('🎨 Starting painting session - using all charges until 0');
     const { width, height, pixels } = state.imageData;
     const { x: startX, y: startY } = state.startPosition;
     const { x: regionX, y: regionY } = state.region;
 
     // Check if we're working with restored data by looking for existing availableColors
-    // If availableColors exists and colorsChecked is true, we don't need to wait for tiles
     const isRestoredData = state.availableColors && state.availableColors.length > 0 && state.colorsChecked;
     
     if (!isRestoredData) {
-      // Only wait for tiles if this is not restored data
       // Wait for original tiles to load if needed
       const tilesReady = await overlayManager.waitForTiles(
         regionX,
@@ -5541,10 +5810,8 @@ function getText(key, params) {
       if (!tilesReady) {
         updateUI('overlayTilesNotLoaded', 'error');
         state.stopFlag = true;
-        return;
+        return 'stopped';
       }
-    } else {
-      // Using restored data - skipping tile wait
     }
 
     let pixelBatch = null;
@@ -5555,82 +5822,21 @@ function getText(key, params) {
       colorUnavailable: 0,
     };
 
-    const transparencyThreshold =
-      state.customTransparencyThreshold || CONFIG.TRANSPARENCY_THRESHOLD;
+    // IMPORTANT: Check charges once at start, then paint until depleted
+    console.log('🔋 Checking initial charges for painting session');
+    const initialChargeCheck = await WPlaceService.getCharges();
+    state.displayCharges = Math.floor(initialChargeCheck.charges);
+    state.preciseCurrentCharges = initialChargeCheck.charges;
+    state.cooldown = initialChargeCheck.cooldown;
 
-    function checkPixelEligibility(x, y) {
-      // CRITICAL FIX: Check module availability before processing
-      if (!Utils || typeof Utils.isWhitePixel !== 'function') {
-        console.error('❌ Utils module not available for pixel eligibility check');
-        return {
-          eligible: false,
-          reason: 'moduleUnavailable',
-        };
-      }
-
-      const idx = (y * width + x) * 4;
-      const r = pixels[idx],
-        g = pixels[idx + 1],
-        b = pixels[idx + 2],
-        a = pixels[idx + 3];
-
-      if (!state.paintTransparentPixels && a < transparencyThreshold)
-        return {
-          eligible: false,
-          reason: 'transparent',
-        };
-      if (!state.paintWhitePixels && Utils.isWhitePixel(r, g, b))
-        return {
-          eligible: false,
-          reason: 'white',
-        };
-
-      let targetRgb = Utils.isWhitePixel(r, g, b)
-        ? [255, 255, 255]
-        : Utils.findClosestPaletteColor(r, g, b, state.activeColorPalette);
-
-      // Template color ID, normalized/mapped to the nearest available color in our palette.
-      // Example: template requires "Slate", but we only have "Dark Gray" available
-      // → mappedTargetColorId = ID of Dark Gray.
-      //
-      // If `state.paintUnavailablePixels` is enabled, the painting would stop earlier
-      // because "Slate" was not found (null returned).
-      //
-      // Else, the template "Slate" is mapped to the closest available color (e.g., "Dark Gray"),
-      // and we proceed with painting using that mapped color.
-      //
-      // In this case, if the canvas pixel is already Slate (mapped to available Dark Gray),
-      // we skip painting, since template and canvas both resolve to the same available color (Dark Gray).
-      const mappedTargetColorId = Utils.resolveColor(
-        targetRgb,
-        state.availableColors,
-        !state.paintUnavailablePixels
-      );
-
-      // Technically, checking only `!mappedTargetColorId.id` would be enough,
-      // but combined with `state.paintUnavailablePixels` it makes the logic explicit:
-      // we only skip when the template color cannot be mapped AND strict mode is on.
-      if (!state.paintUnavailablePixels && !mappedTargetColorId.id) {
-        return {
-          eligible: false,
-          reason: 'colorUnavailable',
-          r,
-          g,
-          b,
-          a,
-          mappedColorId: mappedTargetColorId.id,
-        };
-      }
-      return { eligible: true, r, g, b, a, mappedColorId: mappedTargetColorId.id };
+    if (state.displayCharges <= 0) {
+      console.log('⚡ No charges available, skipping painting session');
+      return 'charges_depleted';
     }
 
-    function skipPixel(reason, id, rgb, x, y) {
-      if (reason !== 'transparent') {
-        console.log(`Skipped pixel for ${reason} (id: ${id}, (${rgb.join(', ')})) at (${x}, ${y})`);
-      }
-      skippedPixels[reason]++;
-    }
+    console.log(`🔋 Starting with ${state.displayCharges} charges - painting until depleted`);
 
+    // Paint pixels until we run out of charges or complete the image
     try {
       const coords = generateCoordinates(
         width,
@@ -5639,24 +5845,127 @@ function getText(key, params) {
         state.coordinateDirection,
         state.coordinateSnake,
         state.blockWidth,
-        state.blockHeight
+        state.blockHeight,
+        state.lastPosition.x,
+        state.lastPosition.y
       );
 
-      outerLoop: for (const [x, y] of coords) {
+      // OPTIMIZATION: Pre-filter already painted pixels (happens only once per session)
+      let eligibleCoords = [];
+      let alreadyPaintedCount = 0;
+      
+      // Log resume information if applicable
+      if (state.lastPosition.x > 0 || state.lastPosition.y > 0) {
+        console.log(`🔄 Resuming painting from position (${state.lastPosition.x}, ${state.lastPosition.y})`);
+        console.log(`📊 Current progress: ${state.paintedPixels} pixels painted`);
+      }
+      
+      if (!state.preFilteringDone) {
+        console.log('🔍 Pre-filtering already painted pixels (one-time detection for this session)...');
+        
+        for (const [x, y] of coords) {
+          const targetPixelInfo = checkPixelEligibility(x, y);
+          
+          if (!targetPixelInfo.eligible) {
+            if (targetPixelInfo.reason !== 'alreadyPainted') {
+              skippedPixels[targetPixelInfo.reason]++;
+            }
+            continue;
+          }
+          
+          // Check if already painted (only once per session)
+          let absX = startX + x;
+          let absY = startY + y;
+          let adderX = Math.floor(absX / 1000);
+          let adderY = Math.floor(absY / 1000);
+          let pixelX = absX % 1000;
+          let pixelY = absY % 1000;
+          
+          try {
+            const tilePixelRGBA = await overlayManager.getTilePixelColor(
+              regionX + adderX,
+              regionY + adderY,
+              pixelX,
+              pixelY
+            );
+
+            if (tilePixelRGBA && Array.isArray(tilePixelRGBA)) {
+              const mappedCanvasColor = Utils.resolveColor(
+                tilePixelRGBA.slice(0, 3),
+                state.availableColors,
+                !state.paintUnavailablePixels  // Use same parameter as target pixel
+              );
+              const isMatch = mappedCanvasColor.id === targetPixelInfo.mappedColorId;
+              if (isMatch) {
+                alreadyPaintedCount++;
+                // Add detected already-painted pixels to progress (after reset to 0)
+                state.paintedPixels++;
+                Utils.markPixelPainted(x, y, regionX + adderX, regionY + adderY);
+                continue; // Skip already painted pixels
+              }
+            }
+          } catch (e) {
+            // If we can't check, include the pixel (better to attempt than skip)
+          }
+          
+          // Add eligible unpainted pixel to list
+          eligibleCoords.push([x, y, targetPixelInfo]);
+        }
+        
+        // Mark pre-filtering as done for this session
+        state.preFilteringDone = true;
+        
+        // Log pre-filtering results
+        if (alreadyPaintedCount > 0) {
+          console.log(`✓ Pre-filter complete: ${alreadyPaintedCount} already painted pixels detected and added to progress`);
+          console.log('ℹ️ This detection will not happen again until a new image/save is loaded');
+          // Update UI to reflect the new progress immediately
+          updateStats();
+        }
+        skippedPixels.alreadyPainted = alreadyPaintedCount;
+      } else {
+        // Pre-filtering already done this session, just filter for basic eligibility
+        console.log('🔍 Using existing pre-filter results (already done this session)');
+        for (const [x, y] of coords) {
+          const targetPixelInfo = checkPixelEligibility(x, y);
+          
+          if (!targetPixelInfo.eligible) {
+            if (targetPixelInfo.reason !== 'alreadyPainted') {
+              skippedPixels[targetPixelInfo.reason]++;
+            }
+            continue;
+          }
+          
+          // Only include pixels that haven't been marked as painted yet
+          if (!Utils.isPixelPainted(x, y)) {
+            eligibleCoords.push([x, y, targetPixelInfo]);
+          }
+        }
+      }
+
+      // Paint eligible pixels (already pre-filtered, no duplicate checks)
+      outerLoop: for (const [x, y, targetPixelInfo] of eligibleCoords) {
         if (state.stopFlag) {
           if (pixelBatch && pixelBatch.pixels.length > 0) {
-            console.log(
-              `🎯 Sending last batch before stop with ${pixelBatch.pixels.length} pixels`
-            );
+            console.log(`🎯 Sending last batch before stop with ${pixelBatch.pixels.length} pixels`);
             await flushPixelBatch(pixelBatch);
           }
           state.lastPosition = { x, y };
-          updateUI('paintingPaused', 'warning', { x, y });
-          // noinspection UnnecessaryLabelOnBreakStatementJS
-          break outerLoop;
+          // Removed 'Paused at' message from main panel to reduce UI clutter
+          return 'stopped';
         }
 
-        const targetPixelInfo = checkPixelEligibility(x, y);
+        // Check if we have charges left (local count, no API call)
+        if (state.displayCharges <= 0) {
+          console.log('⚡ No charges left (local count), ending painting session');
+          if (pixelBatch && pixelBatch.pixels.length > 0) {
+            console.log(`🎯 Sending final batch with ${pixelBatch.pixels.length} pixels`);
+            await flushPixelBatch(pixelBatch);
+          }
+          state.lastPosition = { x, y };
+          return 'charges_depleted';
+        }
+
         let absX = startX + x;
         let absY = startY + y;
 
@@ -5665,61 +5974,23 @@ function getText(key, params) {
         let pixelX = absX % 1000;
         let pixelY = absY % 1000;
 
-        // Template color ID, normalized/mapped to the nearest available color in our palette.
-        // Example: template requires "Slate", but we only have "Dark Gray" available
-        // → mappedTargetColorId = ID of Dark Gray.
-        //
-        // If `state.paintUnavailablePixels` is enabled, the painting would stop earlier
-        // because "Slate" was not found (null returned).
-        //
-        // Else, the template "Slate" is mapped to the closest available color (e.g., "Dark Gray"),
-        // and we proceed with painting using that mapped color.
-        //
-        // In this case, if the canvas pixel is already Slate (mapped to available Dark Gray),
-        // we skip painting, since template and canvas both resolve to the same available color (Dark Gray).
         const targetMappedColorId = targetPixelInfo.mappedColorId;
 
-        if (!targetPixelInfo.eligible) {
-          skipPixel(
-            targetPixelInfo.reason,
-            targetMappedColorId,
-            [targetPixelInfo.r, targetPixelInfo.g, targetPixelInfo.b],
-            pixelX,
-            pixelY
-          );
-          continue;
-        }
-
+        // Set up pixel batch for new region if needed
         if (
           !pixelBatch ||
           pixelBatch.regionX !== regionX + adderX ||
           pixelBatch.regionY !== regionY + adderY
         ) {
           if (pixelBatch && pixelBatch.pixels.length > 0) {
-            console.log(
-              `🌍 Sending region-change batch with ${pixelBatch.pixels.length} pixels (switching to region ${regionX + adderX
-              },${regionY + adderY})`
-            );
+            console.log(`🌍 Sending region-change batch with ${pixelBatch.pixels.length} pixels`);
             const success = await flushPixelBatch(pixelBatch);
-
-            if (success) {
-              if (
-                CONFIG.PAINTING_SPEED_ENABLED &&
-                state.paintingSpeed > 0 &&
-                pixelBatch.pixels.length > 0
-              ) {
-                const batchDelayFactor = Math.max(1, 100 / state.paintingSpeed);
-                const totalDelay = Math.max(100, batchDelayFactor * pixelBatch.pixels.length);
-                await Utils.sleep(totalDelay);
-              }
-              updateStats();
-            } else {
+            if (!success) {
               console.error(`❌ Batch failed permanently after retries. Stopping painting.`);
               state.stopFlag = true;
-              updateUI('paintingBatchFailed', 'error');
-              // noinspection UnnecessaryLabelOnBreakStatementJS
-              break outerLoop;
+              return 'stopped';
             }
+            updateStats();
           }
 
           pixelBatch = {
@@ -5729,51 +6000,7 @@ function getText(key, params) {
           };
         }
 
-        try {
-          // CRITICAL FIX: Check overlay manager availability
-          if (!overlayManager || typeof overlayManager.getTilePixelColor !== 'function') {
-            console.error('❌ Overlay manager not available for pixel color check');
-            state.log(`❌ Overlay manager unavailable - skipping pixel (${pixelX}, ${pixelY})`);
-            continue;
-          }
-
-          const tileKeyParts = [pixelBatch.regionX, pixelBatch.regionY];
-
-          const tilePixelRGBA = await overlayManager.getTilePixelColor(
-            tileKeyParts[0],
-            tileKeyParts[1],
-            pixelX,
-            pixelY
-          );
-
-          if (tilePixelRGBA && Array.isArray(tilePixelRGBA)) {
-            // Resolve the actual canvas pixel color to the closest available color.
-            // (The raw canvas RGB [er, eg, eb] is mapped into state.availableColors)
-            // so that comparison is consistent with targetMappedColorId.
-            const mappedCanvasColor = Utils.resolveColor(
-              tilePixelRGBA.slice(0, 3),
-              state.availableColors
-            );
-            const isMatch = mappedCanvasColor.id === targetMappedColorId;
-            if (isMatch) {
-              skipPixel(
-                'alreadyPainted',
-                targetMappedColorId,
-                [targetPixelInfo.r, targetPixelInfo.g, targetPixelInfo.b],
-                pixelX,
-                pixelY
-              );
-              continue;
-            }
-          }
-        } catch (e) {
-          console.error(`Error checking existing pixel at (${pixelX}, ${pixelY}):`, e);
-          updateUI('paintingPixelCheckFailed', 'error', { x: pixelX, y: pixelY });
-          state.stopFlag = true;
-          // noinspection UnnecessaryLabelOnBreakStatementJS
-          break outerLoop;
-        }
-
+        // Add pixel to batch (no need to check again - already pre-filtered)
         pixelBatch.pixels.push({
           x: pixelX,
           y: pixelY,
@@ -5782,118 +6009,136 @@ function getText(key, params) {
           localY: y,
         });
 
+        // Send batch if it's full
         const maxBatchSize = calculateBatchSize();
         if (pixelBatch.pixels.length >= maxBatchSize) {
-          const modeText =
-            state.batchMode === 'random'
-              ? `random (${state.randomBatchMin}-${state.randomBatchMax})`
-              : 'normal';
-          console.log(
-            `📦 Sending batch with ${pixelBatch.pixels.length} pixels (mode: ${modeText}, target: ${maxBatchSize})`
-          );
+          console.log(`📦 Sending batch with ${pixelBatch.pixels.length} pixels`);
           const success = await flushPixelBatch(pixelBatch);
           if (!success) {
             console.error(`❌ Batch failed permanently after retries. Stopping painting.`);
             state.stopFlag = true;
-            updateUI('paintingBatchFailed', 'error');
-            // noinspection UnnecessaryLabelOnBreakStatementJS
-            break outerLoop;
+            return 'stopped';
           }
-
           pixelBatch.pixels = [];
-        }
-        if (!CONFIG.autoSwap) {
-          if (state.displayCharges < state.cooldownChargeThreshold && !state.stopFlag) {
-            await Utils.dynamicSleep(() => {
-              if (state.displayCharges >= state.cooldownChargeThreshold) {
-                NotificationManager.maybeNotifyChargesReached(true);
-                return 0;
-              }
-              if (state.stopFlag) return 0;
-              return getMsToTargetCharges(
-                state.preciseCurrentCharges,
-                state.cooldownChargeThreshold,
-                state.cooldown
-              );
-            });
-          }
-        }
-        else {
-          if (state.displayCharges < state.cooldownChargeThreshold && !state.stopFlag) {
-            console.log("⚠️ Charges too low, swapping to next account...");
-
-            const accounts = JSON.parse(localStorage.getItem("accounts")) || [];
-            if (accounts.length === 0) {
-              console.warn("❌ No accounts available, stopping painting.");
-              state.stopFlag = true;
-              return;
-            }
-
-            state.accountIndex = (state.accountIndex + 1) % accounts.length;
-            console.log("🔄 Switching to account index:", state.accountIndex);
-
-            const nextToken = accounts[state.accountIndex];
-            console.log("🔑 Next token:", nextToken);
-
-            if (!nextToken) {
-              console.warn("⚠️ Invalid token, skipping...");
-              return;
-            }
-
-            swapAccountTrigger(nextToken);
-
-            let maxRetries = 20;
-            let retryCount = 0;
-            let swapSuccess = false;
-
-            while (!swapSuccess && retryCount < maxRetries) {
-              console.log(`⏳ Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
-
-              // Wait for a short period before checking.
-              await new Promise(resolve => setTimeout(resolve, 1000));
-
-              try {
-                await fetchAccount();
-
-                console.log("✅ Account swap confirmed.");
-                swapSuccess = true;
-              } catch (error) {
-                console.warn("❌ Account swap not yet successful. Retrying...", error);
-                retryCount++;
-              }
-            }
-
-            if (swapSuccess) {
-
-              const { charges, cooldown } = await WPlaceService.getCharges();
-              state.displayCharges = Math.floor(charges);
-              state.cooldown = cooldown;
-              Utils.performSmartSave();
-              updateStats();
-            } else {
-              console.error("❌ Failed to swap account after multiple retries. Stopping loop.");
-              state.stopFlag = true;
-            }
-          }
-        }
-
-        if (state.stopFlag) {
-          // noinspection UnnecessaryLabelOnBreakStatementJS
-          break outerLoop;
+          updateStats();
         }
       }
 
+      // Send final batch if any pixels remain
       if (pixelBatch && pixelBatch.pixels.length > 0 && !state.stopFlag) {
         console.log(`🏁 Sending final batch with ${pixelBatch.pixels.length} pixels`);
         const success = await flushPixelBatch(pixelBatch);
         if (!success) {
-          console.warn(
-            `⚠️ Final batch failed with ${pixelBatch.pixels.length} pixels after all retries.`
-          );
+          console.warn(`⚠️ Final batch failed with ${pixelBatch.pixels.length} pixels`);
         }
       }
+
+      // If we completed the entire coordinate loop, image is complete
+      return state.stopFlag ? 'stopped' : 'completed';
+
     } finally {
-      if (window._chargesInterval) clearInterval(window._chargesInterval);
+      // Log skip statistics for this session
+      console.log(`📊 Session Statistics:`);
+      console.log(`   New pixels painted: ${state.paintedPixels - (skippedPixels.alreadyPainted || 0)}`);
+      console.log(`   Already painted detected: ${skippedPixels.alreadyPainted}`);
+      console.log(`   Total progress: ${state.paintedPixels}`);
+      console.log(`   Pre-filtered - Transparent: ${skippedPixels.transparent}`);
+      console.log(`   Pre-filtered - White: ${skippedPixels.white}`);
+      console.log(`   Pre-filtered - Color Unavailable: ${skippedPixels.colorUnavailable}`);
+    }
+  }
+
+  // Phase 2: Execute cooldown period - wait for target charges (NO token regeneration)
+  async function executeCooldownPeriod() {
+    console.log('⏱️ Entering cooldown period - waiting for target charges');
+    console.log('🚫 NO token regeneration during cooldown (even if expired/invalid)');
+
+    // Check initial charges to calculate wait time
+    let chargeCheckCount = 0;
+    const maxChargeChecks = 10; // Limit API calls during cooldown
+
+    while (!state.stopFlag) {
+      chargeCheckCount++;
+      
+      const { charges, cooldown } = await WPlaceService.getCharges();
+      state.displayCharges = Math.floor(charges);
+      state.preciseCurrentCharges = charges;
+      state.cooldown = cooldown;
+
+      if (state.displayCharges >= state.cooldownChargeThreshold) {
+        console.log(`✅ Cooldown target reached: ${state.displayCharges}/${state.cooldownChargeThreshold}`);
+        NotificationManager.maybeNotifyChargesReached(true);
+        updateStats();
+        return 'target_reached';
+      }
+
+      updateUI('noChargesThreshold', 'warning', {
+        time: Utils.msToTimeText(state.cooldown),
+        threshold: state.cooldownChargeThreshold,
+        current: state.displayCharges,
+      });
+      await updateStats();
+
+      // Smart delay calculation to reduce API calls
+      const chargesNeeded = state.cooldownChargeThreshold - state.displayCharges;
+      const estimatedWaitTime = chargesNeeded * state.cooldown;
+      
+      // Use longer delays during cooldown to prevent rate limiting
+      let delayTime;
+      if (chargeCheckCount < 3) {
+        // First few checks - shorter delay
+        delayTime = Math.max(3000, state.cooldown); // 3 seconds minimum
+      } else if (estimatedWaitTime > 60000) {
+        // Long wait expected - check every 15 seconds
+        delayTime = 10000;
+      } else if (estimatedWaitTime > 30000) {
+        // Medium wait - check every 15 seconds
+        delayTime = 15000;
+      } else {
+        // Close to target - check every 5 seconds
+        delayTime = 5000;
+      }
+
+      console.log(`⏱️ Cooldown check ${chargeCheckCount}: ${state.displayCharges}/${state.cooldownChargeThreshold} charges, waiting 10s before next check`);
+      await Utils.sleep(10000);
+
+      // Fail-safe: Don't exceed max checks
+      if (chargeCheckCount >= maxChargeChecks) {
+        console.warn('⚠️ Max charge checks reached during cooldown, continuing anyway');
+        break;
+      }
+    }
+
+    return 'stopped';
+  }
+
+  // Phase 3: Regenerate token for new painting session
+  async function regenerateTokenForNewSession() {
+    console.log('🔑 Regenerating token for new painting session');
+    
+    try {
+      // Force regenerate token for new session
+      await ensureToken(true); // forceRefresh = true
+      
+      if (!getTurnstileToken()) {
+        console.error('❌ Failed to generate token for new session');
+        return false;
+      }
+      
+      console.log('✅ Token regenerated successfully for new session');
+      return true;
+    } catch (error) {
+      console.error('❌ Token regeneration failed:', error);
+      return false;
+    }
+  }
+
+  // Finalize painting process cleanup
+  async function finalizePaintingProcess() {
+    console.log('🧹 Finalizing painting process');
+    
+    if (window._chargesInterval) {
+      clearInterval(window._chargesInterval);
       window._chargesInterval = null;
     }
 
@@ -5903,8 +6148,6 @@ function getText(key, params) {
     } else {
       updateUI('paintingComplete', 'success', { count: state.paintedPixels });
       state.lastPosition = { x: 0, y: 0 };
-      // Keep painted map until user starts new project
-      // state.paintedMap = null  // Commented out to preserve data
       Utils.saveProgress(); // Save final complete state
       overlayManager.clear();
       const toggleOverlayBtn = document.getElementById('toggleOverlayBtn');
@@ -5913,27 +6156,71 @@ function getText(key, params) {
         toggleOverlayBtn.disabled = true;
       }
     }
-
-    // Log skip statistics
-    console.log(`📊 Pixel Statistics:`);
-    console.log(`   Painted: ${state.paintedPixels}`);
-    console.log(`   Skipped - Transparent: ${skippedPixels.transparent}`);
-    console.log(`   Skipped - White (disabled): ${skippedPixels.white}`);
-    console.log(`   Skipped - Already painted: ${skippedPixels.alreadyPainted}`);
-    console.log(`   Skipped - Color Unavailable: ${skippedPixels.colorUnavailable}`);
-    console.log(
-      `   Total processed: ${state.paintedPixels +
-      skippedPixels.transparent +
-      skippedPixels.white +
-      skippedPixels.alreadyPainted +
-      skippedPixels.colorUnavailable
-      }`
-    );
-
-    updateStats();
   }
 
-  // Helper function to calculate batch size based on mode
+  // Helper function to check pixel eligibility (shared by painting functions)
+  function checkPixelEligibility(x, y) {
+    const { width, height, pixels } = state.imageData;
+    const transparencyThreshold = state.customTransparencyThreshold || CONFIG.TRANSPARENCY_THRESHOLD;
+
+    // CRITICAL FIX: Check module availability before processing
+    if (!Utils || typeof Utils.isWhitePixel !== 'function') {
+      console.error('❌ Utils module not available for pixel eligibility check');
+      return {
+        eligible: false,
+        reason: 'moduleUnavailable',
+      };
+    }
+
+    const idx = (y * width + x) * 4;
+    const r = pixels[idx],
+      g = pixels[idx + 1],
+      b = pixels[idx + 2],
+      a = pixels[idx + 3];
+
+    if (!state.paintTransparentPixels && a < transparencyThreshold)
+      return {
+        eligible: false,
+        reason: 'transparent',
+      };
+    if (!state.paintWhitePixels && Utils.isWhitePixel(r, g, b))
+      return {
+        eligible: false,
+        reason: 'white',
+      };
+
+    let targetRgb = Utils.isWhitePixel(r, g, b)
+      ? [255, 255, 255]
+      : Utils.findClosestPaletteColor(r, g, b, state.activeColorPalette);
+
+    const mappedTargetColorId = Utils.resolveColor(
+      targetRgb,
+      state.availableColors,
+      !state.paintUnavailablePixels
+    );
+
+    if (!state.paintUnavailablePixels && !mappedTargetColorId.id) {
+      return {
+        eligible: false,
+        reason: 'colorUnavailable',
+        r,
+        g,
+        b,
+        a,
+        mappedColorId: mappedTargetColorId.id,
+      };
+    }
+    return { eligible: true, r, g, b, a, mappedColorId: mappedTargetColorId.id };
+  }
+
+  // Helper function to skip pixel and log the reason (minimized logging)
+  function skipPixel(reason, id, rgb, x, y, skippedPixels) {
+    // Minimize logging to prevent console flooding - only log non-routine skips
+    if (reason !== 'transparent' && reason !== 'alreadyPainted') {
+      console.log(`Skipped pixel for ${reason} (id: ${id}, (${rgb.join(', ')})) at (${x}, ${y})`);
+    }
+    skippedPixels[reason]++;
+  }
   function calculateBatchSize() {
     let targetBatchSize;
 
@@ -5970,15 +6257,31 @@ function getText(key, params) {
         console.log(`✅ Batch succeeded on attempt ${attempt}`);
         return true;
       } else if (result === 'token_error') {
-        console.log(`🔑 Token error on attempt ${attempt}, regenerating...`);
+        console.log(`🔑 Token error on attempt ${attempt} - no token available during processing`);
+        console.log(`❌ Stopping batch processing - tokens must be generated at startup/start button only`);
+        updateUI('captchaFailed', 'error');
+        return false; // Stop processing entirely - don't regenerate during processing
+      } else if (result === 'token_regenerated') {
+        console.log(`🔄 Token regenerated on attempt ${attempt} after 403 error - retrying batch`);
+        updateUI('paintingPaused', 'warning', { message: 'Token refreshed, resuming...' });
+        // Don't count token regeneration as a failed attempt, retry immediately
+        attempt--;
+        await Utils.sleep(500); // Brief pause before retry
+        continue;
+      } else if (result === 'token_regeneration_failed') {
+        console.log(`❌ Token regeneration failed on attempt ${attempt} after 403 error`);
+        updateUI('captchaFailed', 'error');
+        return false; // Stop processing if we can't get a valid token
+      } else if (result === 'invalid_token_error') {
+        console.log(`🔑 Invalid token detected on attempt ${attempt}, regenerating...`);
         updateUI('captchaSolving', 'warning');
         try {
-          await handleCaptcha();
+          await handleCaptcha(true); // Allow generation for invalid token cases
           // Don't count token regeneration as a failed attempt
           attempt--;
           continue;
         } catch (e) {
-          console.error(`❌ Token regeneration failed on attempt ${attempt}:`, e);
+          console.error(`❌ Token regeneration failed after invalid token on attempt ${attempt}:`, e);
           updateUI('captchaFailed', 'error');
           // Wait longer before retrying after token failure
           await Utils.sleep(5000);
@@ -6006,17 +6309,10 @@ function getText(key, params) {
   async function sendPixelBatch(pixelBatch, regionX, regionY) {
     let token = getTurnstileToken();
 
-    // Generate new token if we don't have one
+    // Don't auto-generate tokens during processing - return error if no token available
     if (!token) {
-      try {
-        console.log('🔑 Generating Turnstile token for pixel batch...');
-        token = await handleCaptcha();
-        setTurnstileToken(token); // Store for potential reuse
-      } catch (error) {
-        console.error('❌ Failed to generate Turnstile token:', error);
-        createTokenPromise();
-        return 'token_error';
-      }
+      console.warn('⚠️ No token available and auto-generation disabled during processing');
+      return 'token_error';
     }
 
     const coords = new Array(pixelBatch.length * 2);
@@ -6043,40 +6339,21 @@ function getText(key, params) {
         try {
           data = await res.json();
         } catch (_) { }
-        console.error('❌ 403 Forbidden. Turnstile token might be invalid or expired.');
-
-        // Try to generate a new token and retry once
-        try {
-          console.log('🔄 Regenerating Turnstile token after 403...');
-          token = await handleCaptcha();
-          setTurnstileToken(token);
-
-          // Retry the request with new token
-          const retryPayload = { coords, colors, t: token, fp: fpStr32 };
-          var wasmtoken = await createWasmToken(regionX, regionY, retryPayload);
-          const retryRes = await fetch(
-            `https://backend.wplace.live/s0/pixel/${regionX}/${regionY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=UTF-8', "x-pawtect-token": wasmtoken },
-              credentials: 'include',
-              body: JSON.stringify(retryPayload),
-            }
-          );
-
-          if (retryRes.status === 403) {
-            setTurnstileToken(null);
-            createTokenPromise();
-            return 'token_error';
-          }
-
-          const retryData = await retryRes.json();
-          return retryData?.painted === pixelBatch.length;
-        } catch (retryError) {
-          console.error('❌ Token regeneration failed:', retryError);
-          setTurnstileToken(null);
-          createTokenPromise();
-          return 'token_error';
+        console.error('❌ 403 Forbidden. Token invalid during painting - regeneration allowed.');
+        
+        // 403 errors during painting allow token regeneration per workflow requirements
+        console.log('� Token invalid (403) during painting - regenerating token as allowed by workflow');
+        setTurnstileToken(null);
+        createTokenPromise();
+        
+        // Attempt to regenerate token immediately
+        const newToken = await ensureToken(true);
+        if (newToken) {
+          console.log('✅ Token regenerated after 403 error, returning regenerate signal');
+          return 'token_regenerated';
+        } else {
+          console.error('❌ Failed to regenerate token after 403 error');
+          return 'token_regeneration_failed';
         }
       }
 
@@ -6661,6 +6938,211 @@ function getText(key, params) {
     console.log("User's ID :", ID);
     console.log("User's Charges :", Charges, "/", Max);
     console.log("User's Droplets :", Droplets);
+  }
+
+  async function fetchAllAccountDetails() {
+    if (state.isFetchingAllAccounts) {
+      Utils.showAlert("Already fetching account details.", "warning");
+      return;
+    }
+    state.isFetchingAllAccounts = true;
+
+    const refreshBtn = document.getElementById('refreshAllAccountsBtn');
+    if (refreshBtn) {
+      refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      refreshBtn.disabled = true;
+    }
+
+    const accountsListArea = document.getElementById('accountsListArea');
+    if (accountsListArea) {
+      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">Initializing...</div>`;
+    }
+
+    let originalToken = null;
+
+    try {
+      await getAccounts();
+      const accountsTokens = JSON.parse(localStorage.getItem("accounts")) || [];
+      if (accountsTokens.length === 0) {
+        if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">No accounts found.</div>`;
+        return;
+      }
+
+      const { id: originalId } = await WPlaceService.getCharges();
+      state.allAccountsInfo = [];
+      renderAccountsList();
+
+      for (let i = 0; i < accountsTokens.length; i++) {
+        const token = accountsTokens[i];
+        swapAccountTrigger(token);
+
+        let retries = 0;
+        let swapped = false;
+        let fetchedInfo = null;
+        while (retries < 5 && !swapped) {
+          await Utils.sleep(1000);
+          try {
+            fetchedInfo = await WPlaceService.fetchCheck();
+            if (fetchedInfo.ID) swapped = true;
+          } catch (e) { retries++; }
+        }
+
+        if (swapped) {
+          await fetchAccount();
+          const actualName = fetchedInfo.Username || `User${fetchedInfo.ID}` || `Account ${i + 1}`;
+          if (fetchedInfo.ID === originalId) originalToken = token;
+          state.allAccountsInfo.push({ ...fetchedInfo, token, displayName: actualName, isCurrent: fetchedInfo.ID === originalId });
+        } else {
+          const fallbackName = `Account ${i + 1}`;
+          state.allAccountsInfo.push({ token, ID: `...${token.slice(-4)}`, displayName: fallbackName, error: 'Failed to fetch' });
+        }
+        renderAccountsList();
+      }
+    } catch (error) {
+      console.error("Error fetching all account details:", error);
+      if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="color: red;">Error loading accounts.</div>`;
+    } finally {
+      if (originalToken) swapAccountTrigger(originalToken);
+      await Utils.sleep(1000);
+
+      // After switching back, update stats and sync the list
+      const meData = await WPlaceService.getCharges();
+      state.currentCharges = Math.floor(meData.charges);
+      state.cooldown = meData.cooldown;
+      state.maxCharges = Math.floor(meData.max) > 1 ? Math.floor(meData.max) : state.maxCharges;
+      const currentAccountInList = state.allAccountsInfo.find(acc => acc.ID === meData.id);
+      if (currentAccountInList) {
+        currentAccountInList.Charges = state.currentCharges;
+        currentAccountInList.Max = state.maxCharges;
+        currentAccountInList.Droplets = meData.droplets;
+      }
+      await updateStats();
+      renderAccountsList();
+
+      state.isFetchingAllAccounts = false;
+      if (refreshBtn) {
+        refreshBtn.innerHTML = '<i class="fas fa-users-cog"></i>';
+        refreshBtn.disabled = false;
+      }
+    }
+  }
+
+  // Function to update current account charges in the account list
+  function updateCurrentAccountInList() {
+    if (state.allAccountsInfo.length === 0) return;
+    
+    // Find current account in the list and update its charges
+    const currentAccountInList = state.allAccountsInfo.find(acc => acc.isCurrent);
+    if (currentAccountInList) {
+      currentAccountInList.Charges = Math.floor(state.displayCharges || state.preciseCurrentCharges || 0);
+      currentAccountInList.Max = state.maxCharges;
+      // Re-render the account list to show updated charges
+      renderAccountsList();
+    }
+  }
+
+  function renderAccountsList() {
+    const accountsListArea = document.getElementById('accountsListArea');
+    if (!accountsListArea) return;
+
+    accountsListArea.innerHTML = '';
+    if (state.allAccountsInfo.length === 0) {
+      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">No account data. Click <i class="fas fa-users-cog"></i> to refresh.</div>`;
+      return;
+    }
+
+    state.allAccountsInfo.forEach((info, index) => {
+      const item = document.createElement('div');
+      item.className = `wplace-account-item ${info.isCurrent ? 'is-current' : ''}`;
+
+      // Create ordering number element
+      const orderNumber = document.createElement('div');
+      orderNumber.className = 'wplace-account-number';
+      orderNumber.textContent = index + 1;
+
+      const displayName = info.displayName || `Account ${index + 1}`;
+
+      const details = document.createElement('div');
+      details.className = 'wplace-account-details';
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'wplace-account-name';
+      nameDiv.textContent = displayName;
+      nameDiv.title = displayName;
+      details.appendChild(nameDiv);
+
+      let stats;
+      if (info.error) {
+        stats = document.createElement('div');
+        stats.className = 'wplace-account-stats';
+        stats.style.color = 'red';
+        stats.textContent = 'Error';
+      } else {
+        stats = document.createElement('div');
+        stats.className = 'wplace-account-stats';
+        stats.innerHTML = `
+          <span><i class="fas fa-bolt"></i> ${Math.floor(info.Charges || 0)}/${Math.floor(info.Max || 0)}</span>
+          <span><i class="fas fa-tint"></i> ${Math.floor(info.Droplets || 0)}</span>
+        `;
+      }
+
+      item.appendChild(orderNumber);
+      item.appendChild(details);
+      item.appendChild(stats);
+      accountsListArea.appendChild(item);
+    });
+  }
+
+  // Account switching helper functions
+  async function switchToNextAccount(accounts) {
+    state.accountIndex = (state.accountIndex + 1) % accounts.length;
+    console.log(`🔄 Switching to account index: ${state.accountIndex}`);
+    
+    const nextToken = accounts[state.accountIndex];
+    console.log(`🔑 Next token: ${nextToken}`);
+    
+    if (!nextToken) {
+      console.warn('⚠️ Invalid token, skipping...');
+      return false;
+    }
+    
+    return await switchToSpecificAccount(nextToken, state.accountIndex);
+  }
+
+  async function switchToSpecificAccount(token, accountIndex) {
+    swapAccountTrigger(token);
+    
+    let maxRetries = 20;
+    let retryCount = 0;
+    let swapSuccess = false;
+    
+    while (!swapSuccess && retryCount < maxRetries) {
+      console.log(`⏳ Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      try {
+        await fetchAccount();
+        console.log('✅ Account swap confirmed.');
+        swapSuccess = true;
+      } catch (error) {
+        console.warn('❌ Account swap not yet successful. Retrying...', error);
+        retryCount++;
+      }
+    }
+    
+    if (swapSuccess) {
+      const { charges, cooldown } = await WPlaceService.getCharges();
+      state.displayCharges = Math.floor(charges);
+      state.preciseCurrentCharges = charges;
+      state.cooldown = cooldown;
+      state.accountIndex = accountIndex;
+      Utils.performSmartSave();
+      updateStats();
+      return true;
+    } else {
+      console.error('❌ Failed to swap account after multiple retries.');
+      return false;
+    }
   }
 
   // Wait for dependencies before initializing UI

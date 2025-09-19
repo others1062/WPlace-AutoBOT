@@ -556,7 +556,7 @@
   color: var(--wplace-text);
   padding: 4px 8px;
   font-size: 12px;
-  width: 50px;
+  width: 65px;
   text-align: center;
   transition: all 0.2s ease;
   height: 22px;
@@ -615,6 +615,164 @@
   background: rgb(0 0 0 / 5%) !important;
   border-radius: 8px !important;
   border: 1px solid rgb(0 0 0 / 10%) !important;
+}
+
+/* Account switching UI styles */
+.wplace-theme-classic-light .wplace-section {
+    margin: 15px 0;
+    border-radius: var(--wplace-radius);
+    background: rgba(0, 0, 0, 0.03);
+    padding: 15px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.wplace-theme-classic-light .wplace-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--wplace-text);
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+
+/* Auto-swap toggle switch */
+.wplace-theme-classic-light .wplace-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.wplace-theme-classic-light .wplace-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.wplace-theme-classic-light .wplace-slider-round {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 24px;
+}
+
+.wplace-theme-classic-light .wplace-slider-round:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.wplace-theme-classic-light .wplace-switch input:checked + .wplace-slider-round {
+    background-color: #4facfe;
+}
+
+.wplace-theme-classic-light .wplace-switch input:checked + .wplace-slider-round:before {
+    transform: translateX(26px);
+}
+
+/* Account list container */
+.wplace-theme-classic-light .accounts-list-container {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+    padding: 0 6px;
+}
+
+/* Individual account item */
+.wplace-theme-classic-light .wplace-account-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+/* Account ordering number */
+.wplace-theme-classic-light .wplace-account-number {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    background: #4facfe;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: bold;
+    z-index: 1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.wplace-theme-classic-light .wplace-account-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.wplace-theme-classic-light .wplace-account-item.is-current {
+    background: rgba(79, 172, 254, 0.1);
+    border-color: #4facfe;
+    box-shadow: 0 0 10px rgba(79, 172, 254, 0.2);
+}
+
+/* Account details */
+.wplace-theme-classic-light .wplace-account-details {
+    flex: 1;
+    margin-left: 20px;
+    min-width: 0;
+}
+
+.wplace-theme-classic-light .wplace-account-name {
+    font-weight: 600;
+    color: var(--wplace-text);
+    font-size: 12px;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Account statistics */
+.wplace-theme-classic-light .wplace-account-stats {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 11px;
+    color: rgba(0, 0, 0, 0.6);
+    flex-shrink: 0;
+}
+
+.wplace-theme-classic-light .wplace-account-stats i {
+    margin-right: 4px;
+}
+
+.wplace-theme-classic-light .wplace-account-stats .fas.fa-bolt {
+    color: #ff9800;
+}
+
+.wplace-theme-classic-light .wplace-account-stats .fas.fa-tint {
+    color: #2196f3;
 }
 
 

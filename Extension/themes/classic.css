@@ -689,7 +689,7 @@
   color: white;
   padding: 4px 8px;
   font-size: 12px;
-  width: 50px;
+  width: 65px;
   text-align: center;
   transition: all 0.2s ease;
   height: 22px;
@@ -745,5 +745,179 @@
   border: 1px solid #fff;
   border-radius: 12px;
   box-shadow: 0 0 20px rgb(0 0 0 / 50%);
+}
+
+/* Account switching UI styles */
+:root .wplace-section,
+.wplace-theme-classic .wplace-section {
+  margin: 15px 0;
+  border-radius: var(--wplace-radius);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:root .wplace-section-title,
+.wplace-theme-classic .wplace-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--wplace-text);
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+/* Auto-swap toggle switch */
+:root .wplace-switch,
+.wplace-theme-classic .wplace-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+:root .wplace-switch input,
+.wplace-theme-classic .wplace-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+:root .wplace-slider-round,
+.wplace-theme-classic .wplace-slider-round {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #444;
+  transition: 0.4s;
+  border-radius: 24px;
+}
+
+:root .wplace-slider-round:before,
+.wplace-theme-classic .wplace-slider-round:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+:root .wplace-switch input:checked + .wplace-slider-round,
+.wplace-theme-classic .wplace-switch input:checked + .wplace-slider-round {
+  background: var(--wplace-slider-track-bg);
+}
+
+:root .wplace-switch input:checked + .wplace-slider-round:before,
+.wplace-theme-classic .wplace-switch input:checked + .wplace-slider-round:before {
+  transform: translateX(26px);
+}
+
+/* Account list container */
+:root .accounts-list-container,
+.wplace-theme-classic .accounts-list-container {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding: 0 6px;
+}
+
+/* Individual account item */
+:root .wplace-account-item,
+.wplace-theme-classic .wplace-account-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+/* Account ordering number */
+:root .wplace-account-number,
+.wplace-theme-classic .wplace-account-number {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: var(--wplace-highlight);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+:root .wplace-account-item:hover,
+.wplace-theme-classic .wplace-account-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--wplace-highlight);
+}
+
+:root .wplace-account-item.is-current,
+.wplace-theme-classic .wplace-account-item.is-current {
+  background: rgba(79, 172, 254, 0.2);
+  border-color: #4facfe;
+  box-shadow: 0 0 10px rgba(79, 172, 254, 0.3);
+}
+
+/* Account details */
+:root .wplace-account-details,
+.wplace-theme-classic .wplace-account-details {
+  flex: 1;
+  margin-left: 20px;
+  min-width: 0;
+}
+
+:root .wplace-account-name,
+.wplace-theme-classic .wplace-account-name {
+  font-weight: 600;
+  color: var(--wplace-text);
+  font-size: 12px;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Account statistics */
+:root .wplace-account-stats,
+.wplace-theme-classic .wplace-account-stats {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--wplace-muted-text);
+  flex-shrink: 0;
+}
+
+:root .wplace-account-stats i,
+.wplace-theme-classic .wplace-account-stats i {
+  margin-right: 4px;
+}
+
+:root .wplace-account-stats .fas.fa-bolt,
+.wplace-theme-classic .wplace-account-stats .fas.fa-bolt {
+  color: #ffd700;
+}
+
+:root .wplace-account-stats .fas.fa-tint,
+.wplace-theme-classic .wplace-account-stats .fas.fa-tint {
+  color: #00bfff;
 }
 

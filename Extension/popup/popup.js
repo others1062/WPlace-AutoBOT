@@ -18,7 +18,7 @@ const AVAILABLE_SCRIPTS = [
     {
         name: 'Auto-Image.js',
         displayName: '🖼️ Auto Image',
-        description: 'Automated image processing and placement',
+        description: 'Automated image processing and placement with account switching',
         filename: 'Auto-Image.js'
     },
     {
@@ -26,12 +26,6 @@ const AVAILABLE_SCRIPTS = [
         displayName: '🔧 Auto Repair',
         description: 'Automated repair and maintenance tasks',
         filename: 'Auto-Repair.js'
-    },
-    {
-        name: 'Acc-Switch.js',
-        displayName: '🔄 Account Switcher',
-        description: 'Temporary account switching script',
-        filename: 'Acc-Switch.js'
     }
 ];
 
@@ -612,9 +606,6 @@ function showNotification(message, type = 'info') {
         }
     }, 3000);
 
-    // Log to console as well
-    // console.log(`📢 ${type.toUpperCase()}: ${message}`);
-
     // Update status indicator
     if (type === 'error') {
         statusDot.className = 'status-dot error';
@@ -630,10 +621,12 @@ function showNotification(message, type = 'info') {
         statusText.textContent = 'Info';
     }
 
-    // Reset status after 3 seconds
-    setTimeout(() => {
-        checkCurrentTab();
-    }, 3000);
+    // Only reset status if it's not the initial "Ready to launch" message
+    if (message !== 'Ready to launch scripts on wplace.live') {
+        setTimeout(() => {
+            checkCurrentTab();
+        }, 3000);
+    }
 }
 
 function escapeHtml(text) {
@@ -656,17 +649,6 @@ function populateStartupScriptSelect() {
 }
 
 // Load startup script selection from storage
-async function loadStartupScript() {
-    const result = await chrome.storage.local.get('startupScript');
-    const select = document.getElementById('startupScriptSelect');
-    if (select) {
-        select.value = result.startupScript || '';
-    }
-}
-
-
-
-// Load startup script selection
 async function loadStartupScript() {
     const result = await chrome.storage.local.get('startupScript');
     const select = document.getElementById('startupScriptSelect');

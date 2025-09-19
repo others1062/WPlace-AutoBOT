@@ -7,7 +7,7 @@
 // @match        https://wplace.live/*
 // @grant        none
 // @icon
-// ==/UserScript==
+// ==/UserScript==l
 
 ; (async () => {
   console.log('%c🚀 WPlace AutoBOT Script Manager Loading...', 'color: #00ff41; font-weight: bold; font-size: 16px;');
@@ -28,23 +28,14 @@
       icon: '🖼️',
       category: 'automation'
     },
-    { 
-      name: 'Auto-Repair.js', 
-      displayName: '🔧 Auto Repair', 
+    {
+      name: 'Auto-Repair.js',
+      displayName: '🔧 Auto Repair',
       description: 'Automated repair and maintenance tasks',
       icon: '🔧',
       category: 'utility'
-    },
-    {
-      name: 'Acc-Switch.js',
-      displayName: '🔄 Account Switcher',
-      description: 'Temporary account switching script',
-      icon: '🔄',
-      category: 'automation'
     }
-  ];
-
-  // Neon theme styling
+  ];  // Neon theme styling
   const NEON_STYLES = `
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     

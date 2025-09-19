@@ -1773,16 +1773,21 @@
             const targetColor = Utils.resolveColor([originalR, originalG, originalB], state.availableColors);
             const currentColor = Utils.resolveColor(currentPixel.slice(0, 3), state.availableColors);
 
-            if (targetColor.id !== currentColor.id) {
-              damagedPixels.push({
-                x,
-                y,
-                originalColor: targetColor,
-                currentColor: currentColor,
-                originalRgb: [originalR, originalG, originalB],
-                currentRgb: currentPixel.slice(0, 3),
-                isDamagedTransparent: false
-              });
+            if (targetColor.id === currentColor.id) {
+              // Pixel is already correctly painted - skip it
+              continue;
+            }
+
+            // Pixel has wrong color - mark as damaged
+            damagedPixels.push({
+              x,
+              y,
+              originalColor: targetColor,
+              currentColor: currentColor,
+              originalRgb: [originalR, originalG, originalB],
+              currentRgb: currentPixel.slice(0, 3),
+              isDamagedTransparent: false
+            });
               wrongColorPixelsDetected++;
 
               if (!state.autonomousMode || wrongColorPixelsDetected <= 10) {

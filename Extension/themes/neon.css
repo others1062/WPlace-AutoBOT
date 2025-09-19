@@ -571,7 +571,7 @@
   color: var(--wplace-text) !important;
   padding: 2px 4px;
   font-size: 10px;
-  width: 40px;
+  width: 65px;
   text-align: center;
   transition: all 0.2s ease;
   height: 18px;
@@ -631,5 +631,190 @@
   border-radius: 0 !important;
   box-shadow: 0 0 30px rgb(0 255 65 / 50%) !important;
   font-family: 'Press Start 2P', monospace !important;
+}
+
+/* Account switching UI styles */
+.wplace-theme-neon .wplace-section {
+    margin: 15px 0;
+    border-radius: 0;
+    background: rgba(0, 255, 65, 0.05);
+    padding: 15px;
+    border: 2px solid #00ff41;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+    font-family: var(--wplace-font);
+}
+
+.wplace-theme-neon .wplace-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--wplace-text);
+    margin-bottom: 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px var(--wplace-text);
+    font-family: var(--wplace-font);
+}
+
+/* Auto-swap toggle switch */
+.wplace-theme-neon .wplace-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.wplace-theme-neon .wplace-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.wplace-theme-neon .wplace-slider-round {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #1a1a2e;
+    transition: 0.4s;
+    border-radius: 0;
+    border: 2px solid #333;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+}
+
+.wplace-theme-neon .wplace-slider-round:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #fff;
+    transition: 0.4s;
+    border-radius: 0;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.wplace-theme-neon .wplace-switch input:checked + .wplace-slider-round {
+    background-color: #00ff41;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.6);
+}
+
+.wplace-theme-neon .wplace-switch input:checked + .wplace-slider-round:before {
+    transform: translateX(26px);
+    box-shadow: 0 0 12px rgba(0, 255, 65, 0.8);
+}
+
+/* Account list container */
+.wplace-theme-neon .accounts-list-container {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+    padding: 0 6px;
+}
+
+/* Individual account item */
+.wplace-theme-neon .wplace-account-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: rgba(0, 255, 65, 0.03);
+    border-radius: 0;
+    border: 1px solid #00ff41;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
+    position: relative;
+}
+
+/* Account ordering number */
+.wplace-theme-neon .wplace-account-number {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 8px;
+    height: 8px;
+    background: #00ff41;
+    color: #1a1a2e;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: bold;
+    z-index: 1;
+    border: 1px solid #00ff41;
+    box-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+    font-family: var(--wplace-font);
+}
+
+.wplace-theme-neon .wplace-account-item:hover {
+    background: rgba(0, 255, 65, 0.08);
+    border-color: #00ff41;
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
+    transform: translateX(2px);
+}
+
+.wplace-theme-neon .wplace-account-item.is-current {
+    background: rgba(0, 255, 65, 0.15);
+    border-color: #00ff41;
+    box-shadow: 0 0 25px rgba(0, 255, 65, 0.6);
+    animation: neon-pulse 2s infinite;
+}
+
+@keyframes neon-pulse {
+    0%, 100% { box-shadow: 0 0 25px rgba(0, 255, 65, 0.6); }
+    50% { box-shadow: 0 0 35px rgba(0, 255, 65, 0.8); }
+}
+
+/* Account details */
+.wplace-theme-neon .wplace-account-details {
+    flex: 1;
+    margin-left: 20px;
+    min-width: 0;
+}
+
+.wplace-theme-neon .wplace-account-name {
+    font-weight: 600;
+    color: var(--wplace-text);
+    font-size: 8px;
+    margin-bottom: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 0 5px var(--wplace-text);
+    font-family: var(--wplace-font);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Account statistics */
+.wplace-theme-neon .wplace-account-stats {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 8px;
+    color: rgba(0, 255, 65, 0.8);
+    text-transform: uppercase;
+    font-family: var(--wplace-font);
+    flex-shrink: 0;
+}
+
+.wplace-theme-neon .wplace-account-stats i {
+    margin-right: 4px;
+    text-shadow: 0 0 5px currentColor;
+}
+
+.wplace-theme-neon .wplace-account-stats .fas.fa-bolt {
+    color: #ffff00;
+    text-shadow: 0 0 8px #ffff00;
+}
+
+.wplace-theme-neon .wplace-account-stats .fas.fa-tint {
+    color: #00bfff;
+    text-shadow: 0 0 8px #00bfff;
 }
 

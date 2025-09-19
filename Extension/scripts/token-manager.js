@@ -5,12 +5,12 @@
 // @description  Turnstile token management for WPlace AutoBot
 // @author       Wbot
 // @match        https://wplace.live/*
-// @grant        none
+// @grant        nones
 // ==/UserScript==
 
 /**
  * TokenManager - Handles Turnstile token generation, caching, and validation for WPlace AutoBot
- * Extracted from Auto-Image.js for better modularity and reusability
+ * Extracted from Auto-Image.js for better modularity and reusabilitys
  */
 class TokenManager {
   constructor() {

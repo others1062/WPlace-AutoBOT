@@ -10,7 +10,7 @@
 
 /**
  * OverlayManager - Handles overlay processing, tile chunking, and canvas operations for WPlace AutoBot
- * Extracted from Auto-Image.js for better modularity and reusability
+ * Extracted from Auto-Image.js for better modularity and reusabilityc
  */
 class OverlayManager {
   constructor() {

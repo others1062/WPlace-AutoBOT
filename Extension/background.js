@@ -1,6 +1,6 @@
 // Background service worker for WPlace AutoBOT Extension
 
-// Test resource loading on extension start
+// Test resource loading on extension starto
 chrome.runtime.onStartup.addListener(async () => {
     console.log('🚀 WPlace AutoBOT Extension started');
     const resources = await loadExtensionResources();
@@ -15,7 +15,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'executeScript') {
-        // Get tabId from sender or request
+        // Get tabId from sender or requests
         const tabId = request.tabId || sender.tab?.id;
 
         if (!tabId) {
@@ -23,7 +23,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return;
         }
 
-        // Use IIFE for async handling
+        // Use IIFE for async handlings
         (async () => {
             try {
                 await executeLocalScript(request.scriptName, tabId);

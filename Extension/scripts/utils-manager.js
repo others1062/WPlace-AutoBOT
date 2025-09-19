@@ -1,6 +1,6 @@
 /**
  * WPlace AutoBOT - Utils Manager
- * Centralized utility functions for the WPlace automation system
+ * Centralized utility functions for the WPlace automation systemds
  */
 
 class WPlaceUtilsManager {
@@ -408,6 +408,16 @@ class WPlaceUtilsManager {
   }
 
   formatTime(ms) {
+    // Handle invalid or infinite values
+    if (!Number.isFinite(ms) || ms < 0) {
+      return '--:--:--';
+    }
+    
+    // Handle very large values (more than 999 days)
+    if (ms > 999 * 24 * 60 * 60 * 1000) {
+      return '999d+';
+    }
+    
     const seconds = Math.floor((ms / 1000) % 60);
     const minutes = Math.floor((ms / (1000 * 60)) % 60);
     const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
@@ -423,15 +433,34 @@ class WPlaceUtilsManager {
   }
 
   calculateEstimatedTime(remainingPixels, charges, cooldown) {
-    if (remainingPixels <= 0) return 0;
+    // Safety checks for input parameters
+    if (!Number.isFinite(remainingPixels) || remainingPixels <= 0) return 0;
+    if (!Number.isFinite(charges) || charges <= 0) charges = 1;
+    if (!Number.isFinite(cooldown) || cooldown <= 0) cooldown = 30000; // Default 30s
+    
+    const paintingSpeed = window.state?.paintingSpeed || 5;
+    if (!Number.isFinite(paintingSpeed) || paintingSpeed <= 0) {
+      // Fallback calculation without painting speed
+      const cyclesNeeded = Math.ceil(remainingPixels / Math.max(charges, 1));
+      const timeFromCharges = cyclesNeeded * cooldown;
+      return Math.min(timeFromCharges, 999 * 24 * 60 * 60 * 1000); // Cap at 999 days
+    }
 
-    const paintingSpeedDelay = window.state.paintingSpeed > 0 ? 1000 / window.state.paintingSpeed : 1000;
+    const paintingSpeedDelay = 1000 / paintingSpeed;
     const timeFromSpeed = remainingPixels * paintingSpeedDelay;
 
     const cyclesNeeded = Math.ceil(remainingPixels / Math.max(charges, 1));
     const timeFromCharges = cyclesNeeded * cooldown;
 
-    return timeFromSpeed + timeFromCharges;
+    const totalTime = timeFromSpeed + timeFromCharges;
+    
+    // Safety check to prevent infinity and cap at reasonable maximum
+    if (!Number.isFinite(totalTime) || totalTime < 0) {
+      return 0;
+    }
+    
+    // Cap at 999 days to prevent display issues
+    return Math.min(totalTime, 999 * 24 * 60 * 60 * 1000);
   }
 
   // Painted pixel tracking helpers
@@ -470,6 +499,11 @@ class WPlaceUtilsManager {
       return window.state.paintedMap[actualY][actualX];
     }
     return false;
+  }
+
+  // Alias for isPixelPainted - used in pre-filtering logic
+  isPixelMarkedPainted(x, y, regionX = 0, regionY = 0) {
+    return this.isPixelPainted(x, y, regionX, regionY);
   }
 
   // Smart save

@@ -10,7 +10,7 @@
 
 /**
  * ImageProcessor - Handles image loading, processing, color conversion, and dithering for WPlace AutoBot
- * Extracted from Auto-Image.js for better modularity and reusability
+ * Extracted from Auto-Image.js for better modularity and reusabilit
  */
 class ImageProcessor {
   constructor(imageSrc = null) {

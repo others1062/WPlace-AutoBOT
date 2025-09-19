@@ -1,6 +1,6 @@
 // Content script for WPlace AutoBOT - Creates in-page UI
 
-// Check if we're on wplace.live
+// Check if we're on wplace.lives
 if (window.location.hostname === 'wplace.live') {
 
     // Control variables
@@ -59,7 +59,7 @@ if (window.location.hostname === 'wplace.live') {
         }
     }
 
-    // Execute script function
+    // Execute script functions
     async function executeScript(scriptName) {
         if (!autobotButton || currentScript) return;
 
