@@ -170,6 +170,30 @@
                     pixelBlink: true,
                 },
             },
+            "Neon Retro Cyan": {
+                primary: "#1959A1",
+                secondary: "#3C74AF",
+                accent: "#538CC0",
+                text: "#81DCF7",
+                highlight: "#EA9C00",
+                success: "#39ff14",
+                error: "#ff073a",
+                warning: "#ffff00",
+                neon: "00ffff",
+                purple: "#bf00ff",
+                pink: "#ff1493",
+                fontFamily: "'Press Start 2P', monospace",
+                borderRadius: "0",
+                borderStyle: "solid",
+                borderWidth: "3px",
+                boxShadow: "0 0 20px rgba(234 156 0, 0.3), inset 0 0 20px rgba(234 156 0, 0.1)",
+                backdropFilter: "none",
+                animations: {
+                    glow: true,
+                    scanline: true,
+                    pixelBlink: true,
+                },
+            },
         },
         currentTheme: "Classic Autobot",
         autoSwap: true,
@@ -8535,4 +8559,5 @@
             Utils.cleanupTurnstile();
         });
     })
+
 })()
