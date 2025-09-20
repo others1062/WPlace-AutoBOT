@@ -313,30 +313,6 @@ function getText(key, params) {
           'pixel-blink': true,
         },
       },
-        'Neon Retro Teal': {
-        primary: '#1A172A',
-        secondary: '#34315E',
-        accent: '#1A172A',
-        text: '#F8A9FD',
-        highlight: '#F8A9FD',
-        success: '#39ff14',
-        error: '#ff073a',
-        warning: '#ffff00',
-        neon: '#F8A9FD',
-        purple: '#bf00ff',
-        pink: '#ff1493',
-        fontFamily: "'Press Start 2P', monospace",
-        borderRadius: '0',
-        borderStyle: 'solid',
-        borderWidth: '3px',
-        boxShadow: '0 0 20px rgba(234 156 0, 0.3), inset 0 0 20px rgba(234 156 0, 0.1)',
-        backdropFilter: 'none',
-        animations: {
-          glow: true,
-          scanline: true,
-          'pixel-blink': true,
-        },
-      },
       'Acrylic': {
         primary: '#00000080',
         secondary: '#00000040',
@@ -401,8 +377,7 @@ function getText(key, params) {
       'wplace-theme-neon',
       'wplace-theme-neon-cyan',
       'wplace-theme-neon-light',
-      'wplace-theme-neon-purple',
-      'wplace-theme-neon-teal'
+      'wplace-theme-neon-purple'
     );
 
     let themeClass = 'wplace-theme-classic'; // default
@@ -423,9 +398,6 @@ function getText(key, params) {
     } else if (CONFIG.currentTheme === 'Neon Retro Purple') {
       themeClass = 'wplace-theme-neon-purple';
       themeFileName = 'neon-purple';
-    } else if (CONFIG.currentTheme === 'Neon Retro Teal') {
-      themeClass = 'wplace-theme-neon-teal';
-      themeFileName = 'neon-teal';
     } else if (CONFIG.currentTheme === 'Acrylic') {
       themeClass = 'wplace-theme-acrylic';
       themeFileName = 'acrylic';
@@ -1976,8 +1948,6 @@ function getText(key, params) {
         defaultTheme = 'neon-light';
       } else if (CONFIG.currentTheme === 'Neon Retro Purple') {
         defaultTheme = 'neon-purple';
-      } else if (CONFIG.currentTheme === 'Neon Retro Teal') {
-        defaultTheme = 'neon-teal';
       }
 
       console.log(`%c🎯 Loading theme: ${defaultTheme} (${CONFIG.currentTheme})`, 'color: #8b5cf6;');
@@ -2867,7 +2837,7 @@ function getText(key, params) {
               <span>${Utils.t('chromaWeight')}</span>
               <span id="chromaWeightValue" class="resize-chroma-weight-value">${state.chromaPenaltyWeight}</span>
             </div>
-            <input type="range" id="chromaPenaltyWeightSlider" min="0" max="0.5" step="0.01" value="${state.chromaPenaltyWeight}" class="resize-chroma-weight-slider" />
+            <input type="range" id="chromaPenaltyWeightSlider" min="-2" max="2" step="0.1" value="${state.chromaPenaltyWeight}" class="resize-chroma-weight-slider" />
           </div>
           <label class="resize-advanced-toggle">
             <div class="resize-advanced-toggle-content">
@@ -7521,6 +7491,7 @@ function getText(key, params) {
     });
   });
 })();
+
 
 
 
