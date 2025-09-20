@@ -70,7 +70,7 @@ function getText(key, params) {
     CORNER_MARKER_COLOR: { r: 255, g: 255, b: 0, a: 255 }, // Yellow corners like Auto-Guard
     CORNER_MARKER_SIZE: 12, // Larger markers like Auto-Guard
     MIN_AREA_SIZE: 1,
-    MAX_AREA_SIZE: 1000,
+    MAX_AREA_SIZE: 2500,
     COLOR_MAP: {
       0: { id: 1, name: 'Black', rgb: { r: 0, g: 0, b: 0 } },
       1: { id: 2, name: 'Dark Gray', rgb: { r: 60, g: 60, b: 60 } },
