@@ -364,10 +364,14 @@
 
   // NUEVA LÓGICA DE INYECCIÓN - ACTUALIZADA DESDE new.txt
   function inject(callback) {
-    const script = document.createElement('script');
-    script.textContent = `(${callback})();`;
-    document.documentElement?.appendChild(script);
-    script.remove();
+    try {
+      const script = document.createElement('script');
+      script.textContent = `(${callback})();`;
+      document.documentElement?.appendChild(script);
+      script.remove();
+    } catch (error) {
+      console.error('❌ Injection error:', error);
+    }
   }
 
   inject(() => {
@@ -593,7 +597,7 @@
         }
       } catch { }
     }
-    console.error(`❌ Could not find Pawtect chunk: `, error);
+    console.error(`❌ Could not find Pawtect chunk with string: ${str}`);
   }
 
   // Audio notification system
@@ -1788,11 +1792,10 @@
               currentRgb: currentPixel.slice(0, 3),
               isDamagedTransparent: false
             });
-              wrongColorPixelsDetected++;
+            wrongColorPixelsDetected++;
 
-              if (!state.autonomousMode || wrongColorPixelsDetected <= 10) {
-                Utils.addDebugLog(`Color damage at (${x},${y}): expected color ${targetColor.id}, found color ${currentColor.id}`, 'warning');
-              }
+            if (!state.autonomousMode || wrongColorPixelsDetected <= 10) {
+              Utils.addDebugLog(`Color damage at (${x},${y}): expected color ${targetColor.id}, found color ${currentColor.id}`, 'warning');
             }
           }
 

@@ -279,10 +279,19 @@ if (window.location.hostname === 'wplace.live') {
         if (event.data.source !== "my-userscript") return;
         const message = event.data;
         if (message.type === "setCookie" && message.value) {
+            console.log("🍪 Content script received setCookie message:", message);
             chrome.runtime.sendMessage(
                 { type: "setCookie", value: message.value },
                 (response) => {
-                    if (response.status === "ok") {
+                    console.log("📥 Content script received response from background:", response);
+                    // Send response back to userscript
+                    window.postMessage({
+                        type: "setCookieResponse",
+                        status: response ? response.status || 'ok' : 'error',
+                        originalMessage: message
+                    }, "*");
+                    
+                    if (response && response.status === "ok") {
                         console.log("✅ Forwarded token to background.");
                     }
                 }

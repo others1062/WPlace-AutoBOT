@@ -97,11 +97,9 @@
 
   /* Slider colors - defaults for classic compatibility */
   --wplace-slider-thumb-bg: white;
-  --wplace-slider-track-bg: linear-gradient(
-    to right,
-    var(--wplace-icon-primary) 0%,
-    var(--wplace-icon-secondary) 100%
-  );
+  --wplace-slider-track-bg: linear-gradient(to right,
+      var(--wplace-icon-primary) 0%,
+      var(--wplace-icon-secondary) 100%);
 }
 
 /* Theme classes are now defined in separate files */
@@ -112,6 +110,7 @@
 /* Core animations (shared)  */
 /* ========================= */
 @keyframes neon-glow {
+
   0%,
   100% {
     text-shadow:
@@ -129,6 +128,7 @@
 }
 
 @keyframes pixel-blink {
+
   0%,
   50% {
     opacity: 1;
@@ -247,7 +247,7 @@
   position: fixed;
   top: 20px;
   left: 370px;
-  width: 300px;
+  width: 350px;
   max-height: calc(100vh - 40px);
   padding: 0;
   z-index: 9997;
@@ -1079,7 +1079,7 @@
 /* ========================= */
 /* Responsive tweaks         */
 /* ========================= */
-@media (width <= 768px) {
+@media (width <=768px) {
   #wplace-image-bot-container {
     left: 10px;
     width: calc(100vw - 20px);
@@ -1087,7 +1087,8 @@
   }
 
   #wplace-stats-container {
-    display: none !important; /* hide secondary panel on small screens */
+    display: none !important;
+    /* hide secondary panel on small screens */
   }
 
   .wplace-alert-base {
@@ -1992,12 +1993,12 @@
   transition: all 0.3s ease;
 }
 
-.wplace-toggle-switch input:checked + .wplace-toggle-slider {
+.wplace-toggle-switch input:checked+.wplace-toggle-slider {
   background: var(--wplace-success);
   border-color: var(--wplace-success);
 }
 
-.wplace-toggle-switch input:checked + .wplace-toggle-slider:before {
+.wplace-toggle-switch input:checked+.wplace-toggle-slider:before {
   transform: translateX(20px);
   background: white;
 }
@@ -2022,7 +2023,7 @@
   justify-content: space-between;
   padding: 10px 12px;
   border-bottom: 1px solid var(--wplace-border-color);
-  transition: all 0.2s ease;
+  transition: all 0.3s ease, box-shadow 0.5s ease;
 }
 
 .wplace-account-item:last-child {
@@ -2036,6 +2037,39 @@
 .wplace-account-item.current {
   background: var(--wplace-success)20;
   border-left: 3px solid var(--wplace-success);
+  box-shadow: 0 0 15px rgba(46, 204, 113, 0.6), 
+              0 0 25px rgba(46, 204, 113, 0.4), 
+              0 0 35px rgba(46, 204, 113, 0.2);
+  animation: currentAccountGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes currentAccountGlow {
+  from {
+    box-shadow: 0 0 15px rgba(46, 204, 113, 0.6), 
+                0 0 25px rgba(46, 204, 113, 0.4), 
+                0 0 35px rgba(46, 204, 113, 0.2);
+  }
+  to {
+    box-shadow: 0 0 20px rgba(46, 204, 113, 0.8), 
+                0 0 30px rgba(46, 204, 113, 0.6), 
+                0 0 40px rgba(46, 204, 113, 0.4);
+  }
+}
+
+@keyframes currentAccountNumberPulse {
+  from {
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.8);
+    transform: scale(1);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(46, 204, 113, 1.0);
+    transform: scale(1.05);
+  }
+}
+
+.wplace-account-item.next-in-sequence {
+  background: var(--wplace-warning)15;
+  border-left: 3px solid var(--wplace-warning);
 }
 
 .wplace-account-info-item {

@@ -41,9 +41,9 @@ async function executeLocalScript(scriptName, tabId) {
     try {
         console.log(`Loading script: ${scriptName}`);
 
-        // Check if we need to inject dependencies first for Auto-Image.js
-        if (scriptName === 'Auto-Image.js') {
-            console.log('🔑 Auto-Image.js detected, ensuring dependencies are loaded first...');
+        // Check if we need to inject dependencies first for Auto-Image.js or Art-Extractor.js
+        if (scriptName === 'Auto-Image.js' || scriptName === 'Art-Extractor.js') {
+            console.log(`🔑 ${scriptName} detected, ensuring dependencies are loaded first...`);
             
             try {
                 // First inject token-manager.js
@@ -777,34 +777,39 @@ async function setCookie(value) {
     const cleaned = value.trim();
     console.log("[bg] setCookie CALLED with:", cleaned);
 
-    chrome.cookies.set(
-        {
-            url: "https://backend.wplace.live/",
-            name: "j",
-            value: cleaned,
-            domain: cookieDomain,
-            path: "/",
-        },
-        (cookie) => {
-            if (chrome.runtime.lastError) {
-                console.error(
-                    "[bg] cookie set error:",
-                    chrome.runtime.lastError.message
-                );
-            } else {
-                console.log("[bg] cookie set result:", cookie);
+    return new Promise((resolve, reject) => {
+        chrome.cookies.set(
+            {
+                url: "https://backend.wplace.live/",
+                name: "j",
+                value: cleaned,
+                domain: cookieDomain,
+                path: "/",
+            },
+            (cookie) => {
+                if (chrome.runtime.lastError) {
+                    console.error(
+                        "[bg] cookie set error:",
+                        chrome.runtime.lastError.message
+                    );
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    console.log("[bg] cookie set result:", cookie);
 
-                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                    if (tabs.length > 0) {
-                        chrome.tabs.sendMessage(tabs[0].id, {
-                            type: "cookieSet",
-                            value: cleaned,
-                        });
-                    }
-                });
+                    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                        if (tabs.length > 0) {
+                            chrome.tabs.sendMessage(tabs[0].id, {
+                                type: "cookieSet",
+                                value: cleaned,
+                            });
+                        }
+                    });
+                    
+                    resolve(cookie);
+                }
             }
-        }
-    );
+        );
+    });
 }
 
 async function deleteAccountAtIndex(index) {

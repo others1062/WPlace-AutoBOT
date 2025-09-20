@@ -26,6 +26,12 @@ const AVAILABLE_SCRIPTS = [
         displayName: '🔧 Auto Repair',
         description: 'Automated repair and maintenance tasks',
         filename: 'Auto-Repair.js'
+    },
+    {
+        name: 'Art-Extractor.js',
+        displayName: '🎨 Art Extractor',
+        description: 'Extract artwork areas from canvas and save as JSON files',
+        filename: 'Art-Extractor.js'
     }
 ];
 
