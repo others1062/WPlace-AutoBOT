@@ -290,7 +290,7 @@ function getText(key, params) {
         },
       },
       'Neon Retro Purple': {
-        primary: '#463C82',
+        primary: '#1A172A',
         secondary: '#34315E',
         accent: '#1A172A',
         text: '#F8A9FD',
@@ -376,7 +376,8 @@ function getText(key, params) {
       'wplace-theme-acrylic',
       'wplace-theme-neon',
       'wplace-theme-neon-cyan',
-      'wplace-theme-neon-light'
+      'wplace-theme-neon-light',
+      'wplace-theme-neon-purple'
     );
 
     let themeClass = 'wplace-theme-classic'; // default
@@ -1937,14 +1938,16 @@ function getText(key, params) {
       let defaultTheme = 'classic'; // fallback
       if (CONFIG.currentTheme === 'Neon Retro') {
         defaultTheme = 'neon';
-      } else if (CONFIG.currentTheme === 'Neon Retro Cyan') {
-        defaultTheme = 'neon-cyan';
-      } else if (CONFIG.currentTheme === 'Neon Retro Light') {
-        defaultTheme = 'neon-light';
       } else if (CONFIG.currentTheme === 'Classic Light') {
         defaultTheme = 'classic-light';
       } else if (CONFIG.currentTheme === 'Acrylic') {
         defaultTheme = 'acrylic';
+      } else if (CONFIG.currentTheme === 'Neon Retro Cyan') {
+        defaultTheme = 'neon-cyan';
+      } else if (CONFIG.currentTheme === 'Neon Retro Light') {
+        defaultTheme = 'neon-light';
+      } else if (CONFIG.currentTheme === 'Neon Retro Purple') {
+        defaultTheme = 'neon-purple';
       }
 
       console.log(`%c🎯 Loading theme: ${defaultTheme} (${CONFIG.currentTheme})`, 'color: #8b5cf6;');
@@ -7488,6 +7491,7 @@ function getText(key, params) {
     });
   });
 })();
+
 
 
 
