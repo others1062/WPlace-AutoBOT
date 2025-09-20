@@ -7,7 +7,7 @@
   --wplace-secondary: #34315E;
   --wplace-accent: #538CC0;
   --wplace-text: #81DCF7;
-  --wplace-highlight: #EA9C00;
+  --wplace-highlight: #F8A9FD;
   --wplace-success: #39ff14;
   --wplace-error: #ff073a;
   --wplace-warning: #ff0;
@@ -33,7 +33,7 @@
   /* Icon colors - neon variants */
   --wplace-icon-primary: #81DCF7;
   --wplace-icon-secondary: #39ff14;
-  --wplace-icon-palette: #EA9C00;
+  --wplace-icon-palette: #F8A9FD;
   
   /* Additional UI colors - neon variants */
   --wplace-danger: #ff073a;
@@ -521,10 +521,10 @@
 .wplace-theme-neon-purple .wplace-section {
     margin: 15px 0;
     border-radius: 0;
-    background: rgba(0, 255, 255, 0.05);
+    background: rgba(248, 169, 253, 0.05);
     padding: 15px;
     border: 2px solid #00ffff;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    box-shadow: 0 0 20px rgba(248, 169, 253, 0.3);
     font-family: var(--wplace-font);
 }
 
@@ -566,7 +566,7 @@
     transition: 0.4s;
     border-radius: 0;
     border: 2px solid #333;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(248, 169, 253, 0.2);
 }
 
 .wplace-theme-neon-purple .wplace-slider-round:before {
@@ -584,12 +584,12 @@
 
 .wplace-theme-neon-purple .wplace-switch input:checked + .wplace-slider-round {
     background-color: #00ffff;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+    box-shadow: 0 0 20px rgba(248, 169, 253, 0.6);
 }
 
 .wplace-theme-neon-purple .wplace-switch input:checked + .wplace-slider-round:before {
     transform: translateX(26px);
-    box-shadow: 0 0 12px rgba(0, 255, 255, 0.8);
+    box-shadow: 0 0 12px rgba(248, 169, 253, 0.8);
 }
 
 /* Account list container */
@@ -607,11 +607,11 @@
     align-items: center;
     padding: 6px 8px;
     margin: 4px 0;
-    background: rgba(0, 255, 255, 0.03);
+    background: rgba(248, 169, 253, 0.03);
     border-radius: 0;
     border: 1px solid #00ffff;
     transition: all 0.3s ease;
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 5px rgba(248, 169, 253, 0.2);
     position: relative;
 }
 
@@ -632,27 +632,27 @@
     font-weight: bold;
     z-index: 1;
     border: 1px solid #00ffff;
-    box-shadow: 0 0 8px rgba(0, 255, 255, 0.6);
+    box-shadow: 0 0 8px rgba(248, 169, 253, 0.6);
     font-family: var(--wplace-font);
 }
 
 .wplace-theme-neon-purple .wplace-account-item:hover {
-    background: rgba(0, 255, 255, 0.08);
+    background: rgba(248, 169, 253, 0.08);
     border-color: #00ffff;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+    box-shadow: 0 0 15px rgba(248, 169, 253, 0.4);
     transform: translateX(2px);
 }
 
 .wplace-theme-neon-purple .wplace-account-item.is-current {
-    background: rgba(0, 255, 255, 0.15);
+    background: rgba(248, 169, 253, 0.15);
     border-color: #00ffff;
-    box-shadow: 0 0 25px rgba(0, 255, 255, 0.6);
+    box-shadow: 0 0 25px rgba(248, 169, 253, 0.6);
     animation: neon-purple-pulse 2s infinite;
 }
 
 @keyframes neon-purple-pulse {
-    0%, 100% { box-shadow: 0 0 25px rgba(0, 255, 255, 0.6); }
-    50% { box-shadow: 0 0 35px rgba(0, 255, 255, 0.8); }
+    0%, 100% { box-shadow: 0 0 25px rgba(248, 169, 253, 0.6); }
+    50% { box-shadow: 0 0 35px rgba(248, 169, 253, 0.8); }
 }
 
 /* Account details */
@@ -681,7 +681,7 @@
     gap: 8px;
     align-items: center;
     font-size: 8px;
-    color: rgba(0, 255, 255, 0.8);
+    color: rgba(248, 169, 253, 0.8);
     text-transform: uppercase;
     font-family: var(--wplace-font);
     flex-shrink: 0;
