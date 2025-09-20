@@ -373,6 +373,7 @@ function getText(key, params) {
     document.documentElement.classList.remove(
       'wplace-theme-classic',
       'wplace-theme-classic-light',
+      'wplace-theme-classic-teal',
       'wplace-theme-acrylic',
       'wplace-theme-neon',
       'wplace-theme-neon-cyan',
@@ -389,6 +390,9 @@ function getText(key, params) {
     } else if (CONFIG.currentTheme === 'Classic Light') {
       themeClass = 'wplace-theme-classic-light';
       themeFileName = 'classic-light';
+    } else if (CONFIG.currentTheme === 'Classic Teal') {
+      themeClass = 'wplace-theme-classic-teal';
+      themeFileName = 'classic-teal';
     } else if (CONFIG.currentTheme === 'Neon Retro Cyan') {
       themeClass = 'wplace-theme-neon-cyan';
       themeFileName = 'neon-cyan';
@@ -1938,10 +1942,12 @@ function getText(key, params) {
       let defaultTheme = 'classic'; // fallback
       if (CONFIG.currentTheme === 'Neon Retro') {
         defaultTheme = 'neon';
-      } else if (CONFIG.currentTheme === 'Classic Light') {
-        defaultTheme = 'classic-light';
       } else if (CONFIG.currentTheme === 'Acrylic') {
         defaultTheme = 'acrylic';
+      } else if (CONFIG.currentTheme === 'Classic Light') {
+        defaultTheme = 'classic-light';
+      } else if (CONFIG.currentTheme === 'Classic Teal') {
+        defaultTheme = 'classic-teal';
       } else if (CONFIG.currentTheme === 'Neon Retro Cyan') {
         defaultTheme = 'neon-cyan';
       } else if (CONFIG.currentTheme === 'Neon Retro Light') {
