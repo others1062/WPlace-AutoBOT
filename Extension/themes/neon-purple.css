@@ -6,7 +6,7 @@
   --wplace-primary: #1A172A;
   --wplace-secondary: #34315E;
   --wplace-accent: #538CC0;
-  --wplace-text: #81DCF7;
+  --wplace-text: #F8A9FD;
   --wplace-highlight: #F8A9FD;
   --wplace-success: #39ff14;
   --wplace-error: #ff073a;
@@ -16,7 +16,7 @@
   --wplace-radius: 0;
   --wplace-border-style: solid;
   --wplace-border-width: 2px;
-  --wplace-border-color: #81DCF7;
+  --wplace-border-color: #F8A9FD;
   --wplace-shadow: 0 0 20px rgb(234 156 0 / 40%), inset 0 0 20px rgb(234 156 0 / 10%);
   --wplace-backdrop: none;
   --wplace-font: 'Press Start 2P', monospace, 'Courier New';
@@ -31,7 +31,7 @@
   --wplace-pixel-blink: 1;
 
   /* Icon colors - neon variants */
-  --wplace-icon-primary: #81DCF7;
+  --wplace-icon-primary: #F8A9FD;
   --wplace-icon-secondary: #39ff14;
   --wplace-icon-palette: #F8A9FD;
   
@@ -72,7 +72,7 @@
   --wplace-pulse-end: rgb(234 156 0 / 0%);
   
   /* Slider colors - neon style */
-  --wplace-slider-thumb-bg: #81DCF7;
+  --wplace-slider-thumb-bg: #F8A9FD;
 }
 
 /* Neon-specific styling overrides */
