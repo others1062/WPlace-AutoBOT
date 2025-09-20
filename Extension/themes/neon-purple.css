@@ -609,7 +609,7 @@
     margin: 4px 0;
     background: rgba(248, 169, 253, 0.03);
     border-radius: 0;
-    border: 1px solid #F8A9FD;
+    border: 1px solid #00ffff;
     transition: all 0.3s ease;
     box-shadow: 0 0 5px rgba(248, 169, 253, 0.2);
     position: relative;
