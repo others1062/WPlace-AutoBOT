@@ -401,12 +401,12 @@ async function loadExtensionResources() {
             'auto-image-styles.css',
             'themes/acrylic.css',
             'themes/classic-light.css',
+            'themes/classic-teal.css',
             'themes/classic.css',
             'themes/neon.css',
             'themes/neon-cyan.css',
             'themes/neon-light.css',
-            'themes/neon-purple.css',
-            'themes/neon-teal.css'
+            'themes/neon-purple.css'
         ];
 
         for (const themeFile of themeFiles) {
