@@ -289,6 +289,30 @@ function getText(key, params) {
           'pixel-blink': true,
         },
       },
+      'Neon Retro Purple': {
+        primary: '#463C82',
+        secondary: '#34315E',
+        accent: '#1A172A',
+        text: '#F8A9FD',
+        highlight: '#F8A9FD',
+        success: '#39ff14',
+        error: '#ff073a',
+        warning: '#ffff00',
+        neon: '#F8A9FD',
+        purple: '#bf00ff',
+        pink: '#ff1493',
+        fontFamily: "'Press Start 2P', monospace",
+        borderRadius: '0',
+        borderStyle: 'solid',
+        borderWidth: '3px',
+        boxShadow: '0 0 20px rgba(234 156 0, 0.3), inset 0 0 20px rgba(234 156 0, 0.1)',
+        backdropFilter: 'none',
+        animations: {
+          glow: true,
+          scanline: true,
+          'pixel-blink': true,
+        },
+      },
       'Acrylic': {
         primary: '#00000080',
         secondary: '#00000040',
@@ -370,6 +394,9 @@ function getText(key, params) {
     } else if (CONFIG.currentTheme === 'Neon Retro Light') {
       themeClass = 'wplace-theme-neon-light';
       themeFileName = 'neon-light';
+    } else if (CONFIG.currentTheme === 'Neon Retro Purple') {
+      themeClass = 'wplace-theme-neon-purple';
+      themeFileName = 'neon-purple';
     } else if (CONFIG.currentTheme === 'Acrylic') {
       themeClass = 'wplace-theme-acrylic';
       themeFileName = 'acrylic';
@@ -7461,5 +7488,6 @@ function getText(key, params) {
     });
   });
 })();
+
 
 
