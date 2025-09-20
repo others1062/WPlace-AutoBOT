@@ -609,7 +609,7 @@
     margin: 4px 0;
     background: rgba(248, 169, 253, 0.03);
     border-radius: 0;
-    border: 1px solid #00ffff;
+    border: 1px solid #F8A9FD;
     transition: all 0.3s ease;
     box-shadow: 0 0 5px rgba(248, 169, 253, 0.2);
     position: relative;
@@ -638,14 +638,14 @@
 
 .wplace-theme-neon-purple .wplace-account-item:hover {
     background: rgba(248, 169, 253, 0.08);
-    border-color: #00ffff;
+    border-color: #F8A9FD;
     box-shadow: 0 0 15px rgba(248, 169, 253, 0.4);
     transform: translateX(2px);
 }
 
 .wplace-theme-neon-purple .wplace-account-item.is-current {
     background: rgba(248, 169, 253, 0.15);
-    border-color: #00ffff;
+    border-color: #F8A9FD;
     box-shadow: 0 0 25px rgba(248, 169, 253, 0.6);
     animation: neon-purple-pulse 2s infinite;
 }
@@ -693,11 +693,11 @@
 }
 
 .wplace-theme-neon-purple .wplace-account-stats .fas.fa-bolt {
-    color: #ffff00;
+    color: #F8A9FD;
     text-shadow: 0 0 8px #ffff00;
 }
 
 .wplace-theme-neon-purple .wplace-account-stats .fas.fa-tint {
-    color: #00ffff;
+    color: #F8A9FD;
     text-shadow: 0 0 8px #00ffff;
 }
