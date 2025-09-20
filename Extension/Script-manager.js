@@ -34,6 +34,13 @@
       description: 'Automated repair and maintenance tasks',
       icon: '🔧',
       category: 'utility'
+    },
+    {
+      name: 'Art-Extractor.js',
+      displayName: '🎨 Art Extractor',
+      description: 'Extract artwork areas to JSON for auto-repair',
+      icon: '🎨',
+      category: 'utility'
     }
   ];  // Neon theme styling
   const NEON_STYLES = `
