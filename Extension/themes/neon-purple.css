@@ -638,14 +638,14 @@
 
 .wplace-theme-neon-purple .wplace-account-item:hover {
     background: rgba(248, 169, 253, 0.08);
-    border-color: #F8A9FD;
+    border-color: #00ffff;
     box-shadow: 0 0 15px rgba(248, 169, 253, 0.4);
     transform: translateX(2px);
 }
 
 .wplace-theme-neon-purple .wplace-account-item.is-current {
     background: rgba(248, 169, 253, 0.15);
-    border-color: #F8A9FD;
+    border-color: #00ffff;
     box-shadow: 0 0 25px rgba(248, 169, 253, 0.6);
     animation: neon-purple-pulse 2s infinite;
 }
@@ -698,6 +698,6 @@
 }
 
 .wplace-theme-neon-purple .wplace-account-stats .fas.fa-tint {
-    color: #F8A9FD;
+    color: #00ffff;
     text-shadow: 0 0 8px #00ffff;
 }
