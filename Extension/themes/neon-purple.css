@@ -647,7 +647,7 @@
     background: rgba(0, 255, 255, 0.15);
     border-color: #00ffff;
     box-shadow: 0 0 25px rgba(0, 255, 255, 0.6);
-    animation: neon-cyan-pulse 2s infinite;
+    animation: neon-purple-pulse 2s infinite;
 }
 
 @keyframes neon-purple-pulse {
