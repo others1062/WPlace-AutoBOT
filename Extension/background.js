@@ -404,7 +404,9 @@ async function loadExtensionResources() {
             'themes/classic.css',
             'themes/neon.css',
             'themes/neon-cyan.css',
-            'themes/neon-light.css'
+            'themes/neon-light.css',
+            'themes/neon-purple.css',
+            'themes/neon-teal.css'
         ];
 
         for (const themeFile of themeFiles) {
@@ -913,4 +915,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return true; // Important: indicates async response
     }
 });
+
 
