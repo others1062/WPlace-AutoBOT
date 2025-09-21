@@ -846,6 +846,7 @@ function getText(key, params) {
     overlayOpacity: CONFIG.OVERLAY.OPACITY_DEFAULT,
     blueMarbleEnabled: CONFIG.OVERLAY.BLUE_MARBLE_DEFAULT,
     ditheringEnabled: true,
+	invertColorEnabled: false,
     // Advanced color matching settings
     colorMatchingAlgorithm: 'lab',
     enableChromaPenalty: true,
@@ -2809,7 +2810,6 @@ function getText(key, params) {
               <button id="maskModeIgnore" class="wplace-btn resize-mode-btn">Ignore</button>
               <button id="maskModeUnignore" class="wplace-btn resize-mode-btn">Unignore</button>
               <button id="maskModeToggle" class="wplace-btn wplace-btn-primary resize-mode-btn">Toggle</button>
-              <button id="invertColorBtn" class="wplace-btn resize-mode-btn">Invert Color</button>
             </div>
           </div>
           <button id="clearIgnoredBtn" class="wplace-btn resize-clear-btn" title="Clear all ignored pixels">Clear</button>
@@ -2867,14 +2867,20 @@ function getText(key, params) {
             </div>
             <input type="range" id="chromaPenaltyWeightSlider" min="-2" max="2" step="0.1" value="${state.chromaPenaltyWeight}" class="resize-chroma-weight-slider" />
           </div>
-          <label class="resize-advanced-toggle">
-            <div class="resize-advanced-toggle-content">
+		  </label>
+		   <div class="resize-advanced-toggle-content">
+		     <span class="resize-advanced-label-text">Invert Colors</span>
+             <div class="resize-advanced-description">(not working)The result is the corresponding "negative" image</div>
+		   </div>
+		   <input type="checkbox" id="invertColorToggle" ${state.invertColorEnabled ? 'checked' : ''
+		} <label class="resize-advanced-toggle">
+			<div class="resize-advanced-toggle-content">
               <span class="resize-advanced-label-text">Enable Dithering</span>
-              <div class="resize-advanced-description">Floyd–Steinberg error diffusion in preview and applied output</div>
+              <div class="resize-advanced-description">Floyd–Steinberg error diffusion in preview, applied output</div>
             </div>
-            <input type="checkbox" id="enableDitheringToggle" ${state.ditheringEnabled ? 'checked' : ''
+			<input type="checkbox" id="enableDitheringToggle" ${state.ditheringEnabled ? 'checked' : ''	
       } class="resize-advanced-checkbox" />
-          </label>
+          <label class="resize-advanced-toggle">
           <div class="resize-threshold-controls">
             <label class="resize-threshold-label">
               <span class="resize-advanced-label-text">Transparency</span>
@@ -3163,6 +3169,9 @@ function getText(key, params) {
         // Sync advanced settings before save
         const colorAlgorithmSelect = document.getElementById('colorAlgorithmSelect');
         if (colorAlgorithmSelect) state.colorMatchingAlgorithm = colorAlgorithmSelect.value;
+	    const invertColorToggle = document.getElementById('invertColorToggle');
+        if (invertColorToggle)
+          state.enableInvertColor = invertColorToggle.checked;
         const enableChromaPenaltyToggle = document.getElementById('enableChromaPenaltyToggle');
         if (enableChromaPenaltyToggle)
           state.enableChromaPenalty = enableChromaPenaltyToggle.checked;
@@ -6437,6 +6446,7 @@ function getText(key, params) {
         blueMarbleEnabled: document.getElementById('enableBlueMarbleToggle')?.checked,
         ditheringEnabled: state.ditheringEnabled,
         colorMatchingAlgorithm: state.colorMatchingAlgorithm,
+		invertColorEnabled: state.invertColorEnabled,
         enableChromaPenalty: state.enableChromaPenalty,
         chromaPenaltyWeight: state.chromaPenaltyWeight,
         customTransparencyThreshold: state.customTransparencyThreshold,
@@ -6495,6 +6505,7 @@ function getText(key, params) {
       state.blueMarbleEnabled = settings.blueMarbleEnabled ?? CONFIG.OVERLAY.BLUE_MARBLE_DEFAULT;
       state.ditheringEnabled = settings.ditheringEnabled ?? false;
       state.colorMatchingAlgorithm = settings.colorMatchingAlgorithm || 'lab';
+	  state.invertColorEnabled = setting.invertColorEnabled ?? false;
       state.enableChromaPenalty = settings.enableChromaPenalty ?? true;
       state.chromaPenaltyWeight = settings.chromaPenaltyWeight ?? 0.15;
       state.customTransparencyThreshold =
@@ -7445,6 +7456,7 @@ function getText(key, params) {
       const transInput = document.getElementById('transparencyThresholdInput');
       const whiteInput = document.getElementById('whiteThresholdInput');
       const ditherToggle = document.getElementById('enableDitheringToggle');
+	  const invertColorBtn = document.getElementById('enableInvertColor');
       if (algoSelect)
         algoSelect.addEventListener('change', (e) => {
           state.colorMatchingAlgorithm = e.target.value;
@@ -7490,6 +7502,11 @@ function getText(key, params) {
           saveBotSettings();
           _updateResizePreview();
         });
+      if (invertColorBtn)
+		invertColorBtn.addEventListener('click', () => {
+          state.invertColorEnabled = e.target.checked;
+		  state.enableChromaPenalty = true;
+	    });
       if (resetBtn)
         resetBtn.addEventListener('click', () => {
           state.colorMatchingAlgorithm = 'lab';
@@ -7508,7 +7525,7 @@ function getText(key, params) {
           if (whiteInput) whiteInput.value = 250;
           _updateResizePreview();
           Utils.showAlert(Utils.t('advancedColorSettingsReset'), 'success');
-        });
+		});
     };
     // Delay to ensure resize UI built
     setTimeout(advancedInit, 500);
@@ -7519,11 +7536,3 @@ function getText(key, params) {
     });
   });
 })();
-
-
-
-
-
-
-
-
