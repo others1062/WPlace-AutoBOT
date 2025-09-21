@@ -69,6 +69,8 @@ Follow the exact same steps listed for Chrome above, using Kiwi Browser instead.
       
 - [X] Artwork Extractor
 
+- [X] Quick Art mover feature 
+
 - [x] Correct Color Pixel Skip
 
 - [x] Overlay (you don't need Bluemarble anymore)
