@@ -2809,6 +2809,7 @@ function getText(key, params) {
               <button id="maskModeIgnore" class="wplace-btn resize-mode-btn">Ignore</button>
               <button id="maskModeUnignore" class="wplace-btn resize-mode-btn">Unignore</button>
               <button id="maskModeToggle" class="wplace-btn wplace-btn-primary resize-mode-btn">Toggle</button>
+              <button id="invertColorBtn" class="wplace-btn resize-mode-btn">Invert Color</button>
             </div>
           </div>
           <button id="clearIgnoredBtn" class="wplace-btn resize-clear-btn" title="Clear all ignored pixels">Clear</button>
@@ -7518,6 +7519,7 @@ function getText(key, params) {
     });
   });
 })();
+
 
 
 
