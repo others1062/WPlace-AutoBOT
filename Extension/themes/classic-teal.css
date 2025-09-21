@@ -4,8 +4,8 @@
 
 .wplace-theme-classic-teal {
   /* === CORE COLORS === */
-  --wplace-primary: #E0E0E1;           /* Quite white */
-  --wplace-secondary: #FBFBFB;         /* Light white */
+  --wplace-primary: #2BCAB0;           /* Quite white */
+  --wplace-secondary: #41726D;         /* Light white */
   --wplace-accent: #F3F3F3;            /* Darker white */
   --wplace-text: #203C5D;              /* Dark blue text */
   --wplace-highlight: #203C5D;         /* Dark blue highlight */
@@ -95,7 +95,7 @@
 
 /* Main container with clean light styling */
 .wplace-theme-classic-teal #wplace-image-bot-container {
-  background: linear-gradient(135deg, #E0E0E1 0%, #FBFBFB 100%) !important;
+  background: linear-gradient(135deg, #2BCAB0 0%, #41726D 100%) !important;
   color: var(--wplace-text) !important;
   border: 1px solid rgb(0 0 0 / 15%) !important;
   border-radius: 12px !important;
@@ -107,7 +107,7 @@
 
 /* Stats container with proper contrast */
 .wplace-theme-classic-teal #wplace-stats-container {
-  background: linear-gradient(135deg, #FBFBFB 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
   border-radius: 12px !important;
   box-shadow: 0 8px 32px rgb(0 0 0 / 15%) !important;
@@ -120,7 +120,7 @@
 
 /* Headers with light gradient */
 .wplace-theme-classic-teal .wplace-header {
-  background: linear-gradient(135deg, #FBFBFB 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
   color: var(--wplace-highlight) !important;
   border-bottom: 1px solid rgb(0 0 0 / 15%) !important;
   text-shadow: none !important;
@@ -128,7 +128,7 @@
 
 /* Stats header styling */
 .wplace-theme-classic-teal #wplace-stats-container .wplace-header {
-  background: linear-gradient(135deg, #F3F3F3 0%, #E0E0E1 100%) !important;
+  background: linear-gradient(135deg, #F3F3F3 0%, #2BCAB0 100%) !important;
   color: var(--wplace-text) !important;
   border-bottom: 1px solid rgb(0 0 0 / 20%) !important;
   text-shadow: none !important;
@@ -154,7 +154,7 @@
 
 /* Buttons with light styling */
 .wplace-theme-classic-teal .wplace-btn {
-  background: linear-gradient(135deg, #FBFBFB 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
   border-radius: 12px !important;
   color: var(--wplace-text) !important;
@@ -165,26 +165,26 @@
 
 /* Data management section buttons */
 .wplace-theme-classic-teal .wplace-data-management .wplace-btn {
-  background: linear-gradient(135deg, #FBFBFB 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
   color: #203C5D !important;
   font-weight: 500 !important;
 }
 
 .wplace-theme-classic-teal .wplace-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #F3F3F3 0%, #E0E0E1 100%) !important;
+  background: linear-gradient(135deg, #F3F3F3 0%, #2BCAB0 100%) !important;
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%) !important;
   transform: translateY(-1px) !important;
 }
 
 .wplace-theme-classic-teal .wplace-data-management .wplace-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #F3F3F3 0%, #E0E0E1 100%) !important;
+  background: linear-gradient(135deg, #F3F3F3 0%, #2BCAB0 100%) !important;
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%) !important;
 }
 
 /* Settings dialog */
 .wplace-theme-classic-teal #wplace-settings-container {
-  background: linear-gradient(135deg, #E0E0E1 0%, #FBFBFB 100%) !important;
+  background: linear-gradient(135deg, #2BCAB0 0%, #41726D 100%) !important;
   border: 1px solid rgb(0 0 0 / 15%) !important;
   border-radius: 12px !important;
   box-shadow: 0 16px 48px rgb(0 0 0 / 20%), 0 0 0 1px rgb(0 0 0 / 8%) !important;
@@ -227,7 +227,7 @@
 
 /* Resize dialog */
 .wplace-theme-classic-teal .resize-container {
-  background: linear-gradient(135deg, #E0E0E1 0%, #FBFBFB 100%) !important;
+  background: linear-gradient(135deg, #2BCAB0 0%, #41726D 100%) !important;
   border: 1px solid rgb(0 0 0 / 15%) !important;
   border-radius: 12px !important;
   box-shadow: 0 16px 48px rgb(0 0 0 / 20%), 0 0 0 1px rgb(0 0 0 / 8%) !important;
@@ -237,7 +237,7 @@
 
 /* Settings header */
 .wplace-theme-classic-teal .wplace-settings-header {
-  background: linear-gradient(135deg, #FBFBFB 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
   border-bottom: 1px solid rgb(0 0 0 / 15%) !important;
 }
 
@@ -372,7 +372,7 @@
 
 /* Form controls with light styling */
 .wplace-theme-classic-teal .wplace-settings-select {
-  background: #E0E0E1 !important;
+  background: #2BCAB0 !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
   border-radius: 8px !important;
   color: var(--wplace-text) !important;
@@ -387,12 +387,12 @@
 
 /* Dropdown menu options */
 .wplace-theme-classic-teal .wplace-settings-select option {
-  background: #E0E0E1 !important;
+  background: #2BCAB0 !important;
   color: var(--wplace-text) !important;
 }
 
 .wplace-theme-classic-teal .wplace-settings-option {
-  background: #E0E0E1 !important;
+  background: #2BCAB0 !important;
   color: var(--wplace-text) !important;
 }
 
@@ -550,7 +550,7 @@
 }
 
 .wplace-theme-classic-teal .wplace-number-input-compact {
-  background: #E0E0E1;
+  background: #2BCAB0;
   border: 1px solid rgb(0 0 0 / 20%);
   border-radius: 4px;
   color: var(--wplace-text);
@@ -566,7 +566,7 @@
   outline: none;
   border-color: #4facfe;
   box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.3);
-  background: #FBFBFB;
+  background: #41726D;
 }
 
 .wplace-theme-classic-teal .wplace-input-label-compact {
