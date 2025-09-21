@@ -217,6 +217,27 @@ function getText(key, params) {
           'pixel-blink': false,
         },
       },
+      'Classic Teal': {
+        primary: '#2BCAB0',
+        secondary: '#41726D',
+        accent: '#046A79',
+        text: '#0B483C',
+        highlight: '#0B483C',
+        success: '#28a745',
+        error: '#dc3545',
+        warning: '#ffc107',
+        fontFamily: "'Segoe UI', Roboto, sans-serif",
+        borderRadius: '12px',
+        borderStyle: 'solid',
+        borderWidth: '1px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08)',
+        backdropFilter: 'none',
+        animations: {
+          glow: false,
+          scanline: false,
+          'pixel-blink': false,
+        },
+      },
       'Neon Retro': {
         primary: '#1a1a2e',
         secondary: '#16213e',
@@ -7497,6 +7518,7 @@ function getText(key, params) {
     });
   });
 })();
+
 
 
 
