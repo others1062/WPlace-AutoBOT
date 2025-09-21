@@ -23,7 +23,7 @@ function getText(key, params) {
       }
       return text;
     }
-    
+
     // Try with state.language if available
     if (window.state && window.state.language && window.loadedTranslations && window.loadedTranslations[window.state.language] && window.loadedTranslations[window.state.language][key]) {
       let text = window.loadedTranslations[window.state.language][key];
@@ -37,7 +37,7 @@ function getText(key, params) {
   } catch (error) {
     console.warn('Error in getText fallback:', error);
   }
-  
+
   return key; // Fallback to key if no translation found
 }
 
@@ -48,7 +48,7 @@ function getText(key, params) {
     return;
   }
   window.WPLACE_AUTO_IMAGE_LOADED = true;
-  
+
   console.log('%c🚀 WPlace AutoBot Auto-Image Starting...', 'color: #00ff41; font-weight: bold; font-size: 16px;');
 
   // CONFIGURATION CONSTANTS
@@ -875,6 +875,8 @@ function getText(key, params) {
     _saveInProgress: false,
     paintedMap: null,
     accountIndex: 0,
+    originalAccountOrder: [], // Store the original order of accounts
+    currentActiveIndex: 0, // Track current position in the original order
     // Account switching state
     allAccountsInfo: [],
     isFetchingAllAccounts: false,
@@ -895,7 +897,7 @@ function getText(key, params) {
     console.error('❌ WPlaceOverlayManager not available - please ensure overlay-manager.js is loaded first');
     throw new Error('OverlayManager dependency not found');
   }
-  
+
   // Ensure we only have ONE overlay manager instance globally
   let overlayManager;
   if (!window.autoImageOverlayManager) {
@@ -913,16 +915,16 @@ function getText(key, params) {
     console.error('❌ WPlaceTokenManager not available - please ensure token-manager.js is loaded first');
     throw new Error('TokenManager dependency not found');
   }
-  
+
   const tokenManager = window.WPlaceTokenManager;
   const setTurnstileToken = (token) => tokenManager.setTurnstileToken(token);
   const isTokenValid = () => tokenManager.isTokenValid();
   const invalidateToken = () => tokenManager.invalidateToken();
   const ensureToken = (forceRefresh = false) => tokenManager.ensureToken(forceRefresh);
-  
+
   // Getter for the current token value
   const getTurnstileToken = () => tokenManager.turnstileToken;
-  
+
   // Token promise management
   const createTokenPromise = () => {
     tokenManager.tokenPromise = new Promise((resolve) => {
@@ -935,9 +937,9 @@ function getText(key, params) {
     console.error('❌ WPlaceImageProcessor not available - please ensure image-processor.js is loaded first');
     throw new Error('ImageProcessor dependency not found');
   }
-  
+
   const globalImageProcessor = new window.WPlaceImageProcessor();
-  
+
   // Keep these constants for compatibility with other parts of the script
   let retryCount = 0;
   const MAX_RETRIES = 10;
@@ -966,7 +968,7 @@ function getText(key, params) {
 
     const originalFetch = window.fetch;
     // Setup fetch interception
-    
+
     window.fetch = async function (...args) {
       const response = await originalFetch.apply(this, args);
       const url = args[0] instanceof Request ? args[0].url : args[0];
@@ -1058,13 +1060,13 @@ function getText(key, params) {
     sleep: (ms) => window.globalUtilsManager ? window.globalUtilsManager.sleep(ms) : new Promise(r => setTimeout(r, ms)),
     dynamicSleep: (tickAndGetRemainingMs) => window.globalUtilsManager ? window.globalUtilsManager.dynamicSleep(tickAndGetRemainingMs) : Promise.resolve(),
     waitForSelector: (selector, interval, timeout) => window.globalUtilsManager ? window.globalUtilsManager.waitForSelector(selector, interval, timeout) : Promise.resolve(null),
-    msToTimeText: (ms) => window.globalUtilsManager ? window.globalUtilsManager.msToTimeText(ms) : `${Math.ceil(ms/1000)}s`,
-    createScrollToAdjust: (element, updateCallback, min, max, step) => window.globalUtilsManager ? window.globalUtilsManager.createScrollToAdjust(element, updateCallback, min, max, step) : () => {},
-    
+    msToTimeText: (ms) => window.globalUtilsManager ? window.globalUtilsManager.msToTimeText(ms) : `${Math.ceil(ms / 1000)}s`,
+    createScrollToAdjust: (element, updateCallback, min, max, step) => window.globalUtilsManager ? window.globalUtilsManager.createScrollToAdjust(element, updateCallback, min, max, step) : () => { },
+
     // Tile calculation
-    calculateTileRange: (startRegionX, startRegionY, startPixelX, startPixelY, width, height, tileSize) => 
+    calculateTileRange: (startRegionX, startRegionY, startPixelX, startPixelY, width, height, tileSize) =>
       window.globalUtilsManager ? window.globalUtilsManager.calculateTileRange(startRegionX, startRegionY, startPixelX, startPixelY, width, height, tileSize) : {},
-    
+
     // Token management
     loadTurnstile: () => window.globalUtilsManager ? window.globalUtilsManager.loadTurnstile() : Promise.resolve(),
     ensureTurnstileContainer: () => window.globalUtilsManager ? window.globalUtilsManager.ensureTurnstileContainer() : Promise.resolve(),
@@ -1074,7 +1076,7 @@ function getText(key, params) {
     createTurnstileWidgetInteractive: (sitekey, action) => window.globalUtilsManager ? window.globalUtilsManager.createTurnstileWidgetInteractive(sitekey, action) : Promise.resolve(),
     cleanupTurnstile: () => window.globalUtilsManager ? window.globalUtilsManager.cleanupTurnstile() : Promise.resolve(),
     obtainSitekeyAndToken: (fallback) => window.globalUtilsManager ? window.globalUtilsManager.obtainSitekeyAndToken(fallback) : Promise.resolve(fallback),
-    
+
     // DOM utilities
     createElement: (tag, props, children) => window.globalUtilsManager ? window.globalUtilsManager.createElement(tag, props, children) : document.createElement(tag),
     createButton: (id, text, icon, onClick, style) => {
@@ -1087,7 +1089,7 @@ function getText(key, params) {
       if (onClick) btn.addEventListener('click', onClick);
       return btn;
     },
-    
+
     // Translation with fallback
     t: (key, params) => {
       if (window.globalUtilsManager) {
@@ -1102,13 +1104,13 @@ function getText(key, params) {
         console.log(`Alert [${type}]: ${message}`);
       }
     },
-    
+
     // Color utilities
     colorDistance: (a, b) => window.globalUtilsManager ? window.globalUtilsManager.colorDistance(a, b) : Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2) + Math.pow(a[2] - b[2], 2)),
     findClosestPaletteColor: (r, g, b, palette) => window.globalUtilsManager ? window.globalUtilsManager.findClosestPaletteColor(r, g, b, palette) : [r, g, b],
     isWhitePixel: (r, g, b) => window.globalUtilsManager ? window.globalUtilsManager.isWhitePixel(r, g, b) : (r > 240 && g > 240 && b > 240),
     resolveColor: (targetRgb, availableColors, exactMatch) => window.globalUtilsManager ? window.globalUtilsManager.resolveColor(targetRgb, availableColors, exactMatch) : targetRgb,
-    
+
     // CRITICAL FUNCTIONS - Direct implementations to ensure they work
     createImageUploader: () => {
       return new Promise((resolve, reject) => {
@@ -1129,7 +1131,7 @@ function getText(key, params) {
         input.click();
       });
     },
-    
+
     createFileUploader: () => {
       return new Promise((resolve, reject) => {
         const input = document.createElement('input');
@@ -1156,7 +1158,7 @@ function getText(key, params) {
         input.click();
       });
     },
-    
+
     createFileDownloader: (data, filename) => {
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -1168,7 +1170,7 @@ function getText(key, params) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     },
-    
+
     loadProgress: () => {
       try {
         const saved = localStorage.getItem('wplace-bot-progress');
@@ -1179,12 +1181,12 @@ function getText(key, params) {
         return null;
       }
     },
-    
+
     saveProgress: () => {
       try {
         // Use utils manager to build proper save structure like old version
-        const data = window.globalUtilsManager ? 
-          window.globalUtilsManager.buildProgressData() : 
+        const data = window.globalUtilsManager ?
+          window.globalUtilsManager.buildProgressData() :
           {
             timestamp: Date.now(),
             version: '2.2',
@@ -1209,10 +1211,10 @@ function getText(key, params) {
               pixels: Array.from(window.state.imageData.pixels),
               totalPixels: window.state.imageData.totalPixels,
             } : null,
-            paintedMapPacked: window.globalUtilsManager ? 
+            paintedMapPacked: window.globalUtilsManager ?
               window.globalUtilsManager.buildPaintedMapPacked() : null
           };
-        
+
         localStorage.setItem('wplace-bot-progress', JSON.stringify(data));
         return true;
       } catch (error) {
@@ -1220,7 +1222,7 @@ function getText(key, params) {
         return false;
       }
     },
-    
+
     clearProgress: () => {
       try {
         localStorage.removeItem('wplace-bot-progress');
@@ -1235,41 +1237,76 @@ function getText(key, params) {
         return false;
       }
     },
-    
+
     restoreProgress: (savedData) => {
       try {
-        if (!savedData || !savedData.state) return false;
+        console.log('🔍 [DEBUG] RestoreProgress: Starting restoration...');
+        console.log('🔍 [DEBUG] SavedData exists:', !!savedData);
+        console.log('🔍 [DEBUG] SavedData.state exists:', !!savedData?.state);
+        
+        if (!savedData || !savedData.state) {
+          console.error('❌ [DEBUG] RestoreProgress: Invalid savedData or missing state');
+          return false;
+        }
+        
+        console.log('🔍 [DEBUG] Current window.state keys before restore:', Object.keys(window.state || {}));
+        console.log('🔍 [DEBUG] SavedData.state keys:', Object.keys(savedData.state));
+        
+        console.log('🔍 [DEBUG] Performing Object.assign...');
         Object.assign(window.state, savedData.state);
+        console.log('✅ [DEBUG] Object.assign completed successfully');
         
         // Restore available colors from old save files (backward compatibility)
         if (savedData.state.availableColors && Array.isArray(savedData.state.availableColors)) {
+          console.log('🔍 [DEBUG] Restoring availableColors, count:', savedData.state.availableColors.length);
           window.state.availableColors = savedData.state.availableColors;
           window.state.colorsChecked = true; // Mark colors as checked
+          console.log('✅ [DEBUG] AvailableColors restored successfully');
+        } else {
+          console.log('⚠️ [DEBUG] No availableColors found in savedData or not an array');
         }
-        
+
         if (savedData.imageData) {
+          console.log('🔍 [DEBUG] Restoring imageData...');
+          console.log('🔍 [DEBUG] ImageData type check - pixels is array:', Array.isArray(savedData.imageData.pixels));
+          console.log('🔍 [DEBUG] ImageData pixels length:', savedData.imageData.pixels?.length);
+          
           window.state.imageData = {
             ...savedData.imageData,
             pixels: new Uint8ClampedArray(savedData.imageData.pixels),
           };
+          console.log('✅ [DEBUG] ImageData restored successfully');
+          console.log('🔍 [DEBUG] Converted pixels to Uint8ClampedArray, length:', window.state.imageData.pixels.length);
+        } else {
+          console.log('⚠️ [DEBUG] No imageData found in savedData');
         }
-        
+
         if (savedData.paintedMap) {
+          console.log('🔍 [DEBUG] Restoring paintedMap...');
           window.state.paintedMap = savedData.paintedMap.map((row) => Array.from(row));
+          console.log('✅ [DEBUG] PaintedMap restored successfully');
+        } else {
+          console.log('🔍 [DEBUG] No paintedMap found in savedData (this is normal for extracted data)');
         }
         
+        console.log('✅ [DEBUG] RestoreProgress completed successfully');
+        console.log('🔍 [DEBUG] Final window.state.imageLoaded:', window.state.imageLoaded);
+        console.log('🔍 [DEBUG] Final window.state.totalPixels:', window.state.totalPixels);
+
         return true;
       } catch (error) {
-        console.error('Error restoring progress:', error);
+        console.error('❌ [DEBUG] Error in restoreProgress:', error);
+        console.error('❌ [DEBUG] Error stack:', error.stack);
+        console.error('❌ [DEBUG] SavedData structure at error:', JSON.stringify(savedData, null, 2));
         return false;
       }
     },
-    
+
     saveProgressToFile: () => {
       try {
         // Use utils manager to build proper save structure like old version
-        const progressData = window.globalUtilsManager ? 
-          window.globalUtilsManager.buildProgressData() : 
+        const progressData = window.globalUtilsManager ?
+          window.globalUtilsManager.buildProgressData() :
           {
             timestamp: Date.now(),
             version: '2.2',
@@ -1294,10 +1331,10 @@ function getText(key, params) {
               pixels: Array.from(window.state.imageData.pixels),
               totalPixels: window.state.imageData.totalPixels,
             } : null,
-            paintedMapPacked: window.globalUtilsManager ? 
+            paintedMapPacked: window.globalUtilsManager ?
               window.globalUtilsManager.buildPaintedMapPacked() : null
           };
-        
+
         const filename = `wplace-bot-progress-${new Date()
           .toISOString()
           .slice(0, 19)
@@ -1309,21 +1346,85 @@ function getText(key, params) {
         return false;
       }
     },
-    
+
     loadProgressFromFile: async () => {
       try {
+        console.log('🔍 [DEBUG] Starting file upload process...');
         const data = await Utils.createFileUploader();
-        if (!data || !data.state) {
-          throw new Error('Invalid file format');
+        
+        console.log('🔍 [DEBUG] File upload completed. Data type:', typeof data);
+        console.log('🔍 [DEBUG] Data exists:', !!data);
+        
+        if (!data) {
+          console.error('❌ [DEBUG] No data received from file uploader');
+          throw new Error('No data received from file');
         }
+        
+        console.log('🔍 [DEBUG] Data keys:', Object.keys(data));
+        console.log('🔍 [DEBUG] Data.state exists:', !!data.state);
+        console.log('🔍 [DEBUG] Data.imageData exists:', !!data.imageData);
+        console.log('🔍 [DEBUG] Data.version:', data.version);
+        console.log('🔍 [DEBUG] Data.timestamp:', data.timestamp);
+        
+        if (!data.state) {
+          console.error('❌ [DEBUG] Missing state object in loaded data');
+          console.log('🔍 [DEBUG] Available top-level keys:', Object.keys(data));
+          throw new Error('Invalid file format - missing state object');
+        }
+        
+        console.log('🔍 [DEBUG] State object keys:', Object.keys(data.state));
+        console.log('🔍 [DEBUG] State.imageLoaded:', data.state.imageLoaded);
+        console.log('🔍 [DEBUG] State.totalPixels:', data.state.totalPixels);
+        console.log('🔍 [DEBUG] State.startPosition:', data.state.startPosition);
+        console.log('🔍 [DEBUG] State.region:', data.state.region);
+        
+        if (data.imageData) {
+          console.log('🔍 [DEBUG] ImageData width:', data.imageData.width);
+          console.log('🔍 [DEBUG] ImageData height:', data.imageData.height);
+          console.log('🔍 [DEBUG] ImageData pixels length:', data.imageData.pixels?.length);
+          console.log('🔍 [DEBUG] ImageData totalPixels:', data.imageData.totalPixels);
+        }
+        
+        console.log('🔍 [DEBUG] Calling restoreProgress...');
         const success = Utils.restoreProgress(data);
+        console.log('🔍 [DEBUG] RestoreProgress result:', success);
+        
         return success;
       } catch (error) {
-        console.error('Error loading from file:', error);
+        console.error('❌ [DEBUG] Error in loadProgressFromFile:', error);
+        console.error('❌ [DEBUG] Error stack:', error.stack);
         return false;
       }
     },
-    
+
+    loadExtractedFileData: async () => {
+      try {
+        console.log('🔍 [DEBUG] Starting Art-Extractor file upload process...');
+        const data = await Utils.createFileUploader();
+        
+        console.log('🔍 [DEBUG] File upload completed. Data type:', typeof data);
+        console.log('🔍 [DEBUG] Data exists:', !!data);
+        console.log('📖 Raw loaded data:', data);
+        
+        if (!data) {
+          console.error('❌ [DEBUG] No data received from file uploader');
+          return null;
+        }
+        
+        console.log('🔍 [DEBUG] Data keys:', Object.keys(data));
+        console.log('🔍 [DEBUG] Data.state exists:', !!data.state);
+        console.log('🔍 [DEBUG] Data.imageData exists:', !!data.imageData);
+        console.log('🔍 [DEBUG] Data.version:', data.version);
+        console.log('🔍 [DEBUG] Data.timestamp:', data.timestamp);
+        
+        console.log('🔍 [DEBUG] Returning raw data object for Load Extracted feature');
+        return data;
+      } catch (error) {
+        console.error('❌ [DEBUG] Error in loadExtractedFileData:', error);
+        return null;
+      }
+    },
+
     // Other utilities - delegate to globalUtilsManager or provide simple fallbacks
     extractAvailableColors: () => {
       if (window.globalUtilsManager) {
@@ -1334,7 +1435,7 @@ function getText(key, params) {
         return [];
       }
     },
-    formatTime: (ms) => window.globalUtilsManager ? window.globalUtilsManager.formatTime(ms) : `${Math.floor(ms/1000)}s`,
+    formatTime: (ms) => window.globalUtilsManager ? window.globalUtilsManager.formatTime(ms) : `${Math.floor(ms / 1000)}s`,
     calculateEstimatedTime: (remainingPixels, charges, cooldown) => window.globalUtilsManager ? window.globalUtilsManager.calculateEstimatedTime(remainingPixels, charges, cooldown) : 0,
     initializePaintedMap: (width, height) => window.globalUtilsManager ? window.globalUtilsManager.initializePaintedMap(width, height) : console.log('Painted map not available'),
     markPixelPainted: (x, y, regionX, regionY) => window.globalUtilsManager ? window.globalUtilsManager.markPixelPainted(x, y, regionX, regionY) : false,
@@ -1358,7 +1459,7 @@ function getText(key, params) {
     constructor(imageSrc) {
       // Create instance of the modular ImageProcessor
       this._processor = new window.WPlaceImageProcessor(imageSrc);
-      
+
       // Legacy compatibility properties
       this.imageSrc = imageSrc;
       this.img = null;
@@ -1368,7 +1469,7 @@ function getText(key, params) {
 
     async load() {
       await this._processor.load();
-      
+
       // Update legacy properties for compatibility
       this.img = this._processor.img;
       this.canvas = this._processor.canvas;
@@ -1385,12 +1486,12 @@ function getText(key, params) {
 
     resize(newWidth, newHeight) {
       const result = this._processor.resize(newWidth, newHeight);
-      
+
       // Update legacy properties
       this.img = this._processor.img;
       this.canvas = this._processor.canvas;
       this.ctx = this._processor.ctx;
-      
+
       return result;
     }
 
@@ -1593,7 +1694,7 @@ function getText(key, params) {
 
   // UI UPDATE FUNCTIONS (declared early to avoid reference errors)
   let updateUI = () => { };
-  let updateStats = () => { };
+  let updateStats = async () => { };
   let updateDataButtons = () => { };
 
   function updateActiveColorPalette() {
@@ -2042,6 +2143,12 @@ function getText(key, params) {
                 <i class="fas fa-upload"></i>
                 <span>${Utils.t('uploadImage')}</span>
               </button>
+              <button id="loadExtractedBtn" class="wplace-btn wplace-btn-secondary" disabled title="Load artwork extracted from Art-Extractor">
+                <i class="fas fa-file-import"></i>
+                <span>Load Extracted</span>
+              </button>
+            </div>
+            <div class="wplace-row">
               <button id="resizeBtn" class="wplace-btn wplace-btn-primary" disabled>
                 <i class="fas fa-expand"></i>
                 <span>${Utils.t('resizeImage')}</span>
@@ -2086,7 +2193,7 @@ function getText(key, params) {
                 <label id="cooldownLabel">${Utils.t('waitCharges')}:</label>
                 <div class="wplace-dual-control-compact">
                     <div class="wplace-slider-container-compact">
-                        <input type="range" id="cooldownSlider" class="wplace-slider" min="1" max="1" value="${state.cooldownChargeThreshold}">
+                        <input type="range" id="cooldownSlider" class="wplace-overlay-opacity-slider" min="1" max="1" value="${state.cooldownChargeThreshold}">
                     </div>
                     <div class="wplace-input-group-compact">
                         <button id="cooldownDecrease" class="wplace-input-btn-compact" type="button">-</button>
@@ -2097,7 +2204,7 @@ function getText(key, params) {
                 </div>
             </div>
         </div>
-
+        
         <!-- Data Section -->
         <div class="wplace-section">
           <div class="wplace-section-title">💾 Data Management</div>
@@ -2403,7 +2510,7 @@ function getText(key, params) {
             </div>
             <div class="wplace-dual-control-compact">
                 <div class="wplace-speed-slider-container-compact">
-                  <input type="range" id="speedSlider" min="${CONFIG.PAINTING_SPEED.MIN}" max="${CONFIG.PAINTING_SPEED.MAX}" value="${CONFIG.PAINTING_SPEED.DEFAULT}" class="wplace-speed-slider">
+                  <input type="range" id="speedSlider" min="${CONFIG.PAINTING_SPEED.MIN}" max="${CONFIG.PAINTING_SPEED.MAX}" value="${CONFIG.PAINTING_SPEED.DEFAULT}" class="wplace-overlay-opacity-slider">
                 </div>
                 <div class="wplace-speed-input-container-compact">
                   <div class="wplace-input-group-compact">
@@ -3100,6 +3207,7 @@ function getText(key, params) {
 
           try {
             await updateStats();
+            await updateCurrentAccountInList();
           } catch (error) {
             console.error('Error refreshing charges:', error);
           } finally {
@@ -3637,7 +3745,7 @@ function getText(key, params) {
     }
 
     if (loadBtn) {
-      loadBtn.addEventListener('click', () => {
+      loadBtn.addEventListener('click', async () => {
         const savedData = Utils.loadProgress();
         if (!savedData) {
           updateUI('noSavedData', 'warning');
@@ -3647,10 +3755,10 @@ function getText(key, params) {
 
         // CRITICAL FIX: If save file contains complete data, bypass initial setup check
         // This matches old version behavior where save files could be loaded immediately
-        const hasCompleteData = savedData.state && savedData.imageData && 
-                               savedData.state.availableColors && 
-                               savedData.state.availableColors.length > 0;
-        
+        const hasCompleteData = savedData.state && savedData.imageData &&
+          savedData.state.availableColors &&
+          savedData.state.availableColors.length > 0;
+
         if (!state.initialSetupComplete && !hasCompleteData) {
           Utils.showAlert(Utils.t('pleaseWaitInitialSetup'), 'warning');
           return;
@@ -3675,14 +3783,14 @@ function getText(key, params) {
             updateDataButtons();
 
             // CRITICAL FIX: Force immediate stats update after save loading
-            updateStats();
-            
+            await updateStats();
+
             // Force stats display refresh by updating the stats container
             const statsContainer = document.getElementById('wplace-stats-container');
             if (statsContainer && typeof updateStats === 'function') {
               // Trigger a forced visual refresh of the stats
-              setTimeout(() => {
-                updateStats();
+              setTimeout(async () => {
+                await updateStats();
               }, 100);
             }
 
@@ -3693,8 +3801,12 @@ function getText(key, params) {
 
             if (!state.colorsChecked) {
               uploadBtn.disabled = false;
+              const loadExtractedBtn = document.getElementById('loadExtractedBtn');
+              if (loadExtractedBtn) loadExtractedBtn.disabled = false;
             } else {
               uploadBtn.disabled = false;
+              const loadExtractedBtn = document.getElementById('loadExtractedBtn');
+              if (loadExtractedBtn) loadExtractedBtn.disabled = false;
               selectPosBtn.disabled = false;
             }
 
@@ -3722,28 +3834,52 @@ function getText(key, params) {
 
     if (loadFromFileBtn) {
       loadFromFileBtn.addEventListener('click', async () => {
+        console.log('🔍 [DEBUG] Load from file button clicked');
+        console.log('🔍 [DEBUG] Initial setup complete:', state.initialSetupComplete);
+        
         try {
           // First check if we can load the file - this will tell us if it has complete data
+          console.log('🔍 [DEBUG] Starting file upload...');
           const fileData = await Utils.createFileUploader();
+          
+          console.log('🔍 [DEBUG] File data received:', !!fileData);
+          console.log('🔍 [DEBUG] File data keys:', fileData ? Object.keys(fileData) : 'N/A');
+          
           if (!fileData || !fileData.state) {
+            console.error('❌ [DEBUG] Invalid file data or missing state');
+            console.log('🔍 [DEBUG] FileData:', fileData);
             Utils.showAlert(Utils.t('invalidFileFormat'), 'error');
             return;
           }
 
           // CRITICAL FIX: If file contains complete data, bypass initial setup check
-          const hasCompleteData = fileData.state && fileData.imageData && 
-                                 fileData.state.availableColors && 
-                                 fileData.state.availableColors.length > 0;
-          
+          const hasCompleteData = fileData.state && fileData.imageData &&
+            fileData.state.availableColors &&
+            fileData.state.availableColors.length > 0;
+            
+          console.log('🔍 [DEBUG] Has complete data check:');
+          console.log('  - fileData.state:', !!fileData.state);
+          console.log('  - fileData.imageData:', !!fileData.imageData);
+          console.log('  - fileData.state.availableColors:', !!fileData.state.availableColors);
+          console.log('  - availableColors length:', fileData.state.availableColors?.length);
+          console.log('  - hasCompleteData result:', hasCompleteData);
+
           if (!state.initialSetupComplete && !hasCompleteData) {
+            console.log('⚠️ [DEBUG] Setup not complete and no complete data, showing warning');
             Utils.showAlert(Utils.t('pleaseWaitFileSetup'), 'warning');
             return;
           }
 
+          console.log('🔍 [DEBUG] Calling restoreProgress...');
           const success = Utils.restoreProgress(fileData);
+          console.log('🔍 [DEBUG] RestoreProgress result:', success);
+          
           if (success) {
+            console.log('✅ [DEBUG] File loaded successfully');
+            
             // CRITICAL FIX: Set initial setup complete if file had complete data
             if (hasCompleteData) {
+              console.log('🔍 [DEBUG] Setting initialSetupComplete to true due to complete data');
               state.initialSetupComplete = true;
             }
 
@@ -3751,30 +3887,51 @@ function getText(key, params) {
             Utils.showAlert(Utils.t('fileLoaded'), 'success');
             updateDataButtons();
 
+            console.log('🔍 [DEBUG] Updating stats...');
             await updateStats();
 
             // Restore overlay if image data was loaded from file
+            console.log('🔍 [DEBUG] Attempting to restore overlay...');
             await Utils.restoreOverlayFromData().catch((error) => {
-              console.error('Failed to restore overlay from file:', error);
+              console.error('❌ [DEBUG] Failed to restore overlay from file:', error);
             });
 
+            console.log('🔍 [DEBUG] Updating button states after load...');
+            console.log('  - state.colorsChecked:', state.colorsChecked);
+            console.log('  - state.imageLoaded:', state.imageLoaded);
+            console.log('  - state.startPosition:', !!state.startPosition);
+            console.log('  - state.region:', !!state.region);
+
             if (state.colorsChecked) {
+              console.log('🔍 [DEBUG] Enabling buttons due to colorsChecked');
               uploadBtn.disabled = false;
               selectPosBtn.disabled = false;
               resizeBtn.disabled = false;
             } else {
+              console.log('🔍 [DEBUG] Only enabling upload button');
               uploadBtn.disabled = false;
             }
 
             if (state.imageLoaded && state.startPosition && state.region && state.colorsChecked) {
+              console.log('🔍 [DEBUG] All conditions met, enabling start button');
               startBtn.disabled = false;
+            } else {
+              console.log('⚠️ [DEBUG] Start button requirements not met');
             }
+          } else {
+            console.error('❌ [DEBUG] RestoreProgress failed');
+            Utils.showAlert('File loading failed - check console for details', 'error');
           }
         } catch (error) {
+          console.error('❌ [DEBUG] Error in file load process:', error);
+          console.error('❌ [DEBUG] Error stack:', error.stack);
+          
           if (error.message === 'Invalid JSON file') {
+            console.error('❌ [DEBUG] Invalid JSON file detected');
             Utils.showAlert(Utils.t('invalidFileFormat'), 'error');
           } else {
-            Utils.showAlert(Utils.t('fileError'), 'error');
+            console.error('❌ [DEBUG] General file error:', error.message);
+            Utils.showAlert(`File error: ${error.message}`, 'error');
           }
         }
       });
@@ -3860,23 +4017,21 @@ function getText(key, params) {
 
       const shouldCallApi = isFirstCheck || isTimeToUpdate;
 
-      if (shouldCallApi) {
-        const { charges, max, cooldown } = await WPlaceService.getCharges();
-        state.displayCharges = Math.floor(charges);
-        state.preciseCurrentCharges = charges;
-        state.cooldown = cooldown;
-        state.maxCharges = Math.floor(max) > 1 ? Math.floor(max) : state.maxCharges;
+      const { charges, max, cooldown } = await WPlaceService.getCharges();
+      state.displayCharges = Math.floor(charges);
+      state.preciseCurrentCharges = charges;
+      state.cooldown = cooldown;
+      state.maxCharges = Math.floor(max) > 1 ? Math.floor(max) : state.maxCharges;
 
-        state.fullChargeData = {
-          current: charges,
-          max: max,
-          cooldownMs: cooldown,
-          startTime: Date.now(),
-          spentSinceShot: 0,
-        };
-        // Evaluate notifications every time we refresh server-side charges
-        NotificationManager.maybeNotifyChargesReached();
-      }
+      state.fullChargeData = {
+        current: charges,
+        max: max,
+        cooldownMs: cooldown,
+        startTime: Date.now(),
+        spentSinceShot: 0,
+      };
+      // Evaluate notifications every time we refresh server-side charges
+      NotificationManager.maybeNotifyChargesReached();
 
       if (state.fullChargeInterval) {
         clearInterval(state.fullChargeInterval);
@@ -3895,18 +4050,18 @@ function getText(key, params) {
         cooldownInput.max = state.maxCharges;
       }
 
-      // Update current account charges in the account list
-      updateCurrentAccountInList();
+      // // Update current account charges in the account list
+      // await updateCurrentAccountInList();
 
       let imageStatsHTML = '';
       if (state.imageLoaded) {
         const progress =
           state.totalPixels > 0 ? Math.round((state.paintedPixels / state.totalPixels) * 100) : 0;
         const remainingPixels = state.totalPixels - state.paintedPixels;
-        
+
         // Updated estimation calculation for new cooldown logic
         // Now we wait for cooldownChargeThreshold before processing pixels
-        
+
         // Calculate batch size (with fallback if function not yet defined)
         let batchSize;
         try {
@@ -3914,47 +4069,47 @@ function getText(key, params) {
         } catch (e) {
           batchSize = state.paintingSpeed || 5;
         }
-        
+
         // Ensure batchSize is valid and not zero
         batchSize = Math.max(1, Math.min(batchSize, remainingPixels));
         const batchesNeeded = Math.ceil(remainingPixels / batchSize);
-        
+
         // Calculate time accounting for cooldown threshold behavior with safety checks
         let estimatedMs = 0;
         if (remainingPixels > 0 && Number.isFinite(state.cooldown) && state.cooldown > 0) {
           // Current charges available check
           const currentCharges = Math.max(0, state.displayCharges);
           const thresholdCharges = Math.max(1, state.cooldownChargeThreshold || 1);
-          
+
           if (currentCharges < thresholdCharges) {
             // Need to wait for charges to reach threshold first
             const chargesNeeded = thresholdCharges - currentCharges;
             estimatedMs += chargesNeeded * state.cooldown;
           }
-          
+
           // Calculate painting time more accurately
           // Each batch uses thresholdCharges, so calculate how many cycles we need
           const pixelsPerCycle = Math.min(batchSize, thresholdCharges);
           const cyclesNeeded = Math.ceil(remainingPixels / pixelsPerCycle);
-          
+
           // Time between cycles (waiting for charges to regenerate)
           if (cyclesNeeded > 1) {
             const regenerationTime = (cyclesNeeded - 1) * thresholdCharges * state.cooldown;
             estimatedMs += regenerationTime;
           }
-          
+
           // Add painting speed delay if enabled
           if (CONFIG.PAINTING_SPEED_ENABLED && state.paintingSpeed > 0) {
             const paintingDelay = remainingPixels * (1000 / state.paintingSpeed);
             estimatedMs += paintingDelay;
           }
         }
-        
+
         // Safety check to prevent infinity or invalid values
         if (!Number.isFinite(estimatedMs) || estimatedMs < 0) {
           estimatedMs = 0;
         }
-        
+
         state.estimatedTime = estimatedMs;
         progressBar.style.width = `${progress}%`;
 
@@ -5087,7 +5242,7 @@ function getText(key, params) {
 
         // Keep state.imageData.processor as the original-based source; painting uses paletted pixels already stored
 
-        updateStats();
+        await updateStats();
         updateUI('resizeSuccess', 'success', {
           width: newWidth,
           height: newHeight,
@@ -5189,7 +5344,7 @@ function getText(key, params) {
           state.availableColors = availableColors;
           state.colorsChecked = true;
           updateUI('colorsFound', 'success', { count: availableColors.length });
-          updateStats();
+          await updateStats();
           selectPosBtn.disabled = false;
           // Only enable resize button if image is also loaded
           if (state.imageLoaded) {
@@ -5268,11 +5423,184 @@ function getText(key, params) {
             startBtn.disabled = false;
           }
 
-          updateStats();
+          await updateStats();
           updateDataButtons();
           updateUI('imageLoaded', 'success', { count: totalValidPixels });
         } catch {
           updateUI('imageError', 'error');
+        }
+      });
+    }
+
+    // Load Extracted button event listener - for loading Art-Extractor JSON files
+    const loadExtractedBtn = document.getElementById('loadExtractedBtn');
+    if (loadExtractedBtn) {
+      loadExtractedBtn.addEventListener('click', async () => {
+        try {
+          updateUI('loadingImage', 'default');
+          const fileData = await Utils.loadExtractedFileData();
+          
+          if (!fileData) {
+            updateUI('ready', 'default');
+            return;
+          }
+
+          console.log('📁 Loading extracted artwork from Art-Extractor...');
+          console.log('🔍 [DEBUG] Loaded file data structure:', {
+            hasState: !!fileData.state,
+            hasImageData: !!fileData.imageData,
+            topLevelKeys: Object.keys(fileData),
+            stateKeys: fileData.state ? Object.keys(fileData.state) : 'N/A',
+            imageDataKeys: fileData.imageData ? Object.keys(fileData.imageData) : 'N/A',
+            fileDataType: typeof fileData,
+            stateType: typeof fileData.state,
+            imageDataType: typeof fileData.imageData
+          });
+          
+          // Validate the data structure before restoring
+          if (!fileData || typeof fileData !== 'object') {
+            throw new Error('Invalid file format: File data is not a valid object');
+          }
+          
+          if (!fileData.state || typeof fileData.state !== 'object') {
+            console.error('❌ State validation failed. FileData:', fileData);
+            throw new Error('Invalid file format: Missing or invalid state object. Please ensure you exported from Art-Extractor correctly.');
+          }
+          
+          if (!fileData.imageData || typeof fileData.imageData !== 'object') {
+            console.error('❌ ImageData validation failed. FileData:', fileData);
+            throw new Error('Invalid file format: Missing or invalid imageData object. Please ensure you completed the area scan in Art-Extractor.');
+          }
+          
+          if (!fileData.imageData.pixels || !Array.isArray(fileData.imageData.pixels) || fileData.imageData.pixels.length === 0) {
+            console.error('❌ Pixel data validation failed. ImageData:', fileData.imageData);
+            throw new Error('Invalid file format: No pixel data found. Please scan an area in Art-Extractor before exporting.');
+          }
+          
+          // Ensure critical fields are present for Art-Extractor compatibility
+          if (!fileData.state.availableColors) {
+            console.warn('⚠️ No availableColors in file, using defaults');
+            fileData.state.availableColors = [];
+          }
+          
+          // Use the existing restoreProgress function but with special handling
+          const restoreSuccess = await Utils.restoreProgress(fileData);
+          
+          if (!restoreSuccess) {
+            throw new Error('Failed to restore progress data');
+          }
+          
+          // After loading, we need to enter position selection mode like when uploading images
+          if (state.imageLoaded) {
+            console.log('🎯 Extracted artwork loaded, entering position selection mode...');
+            
+            // Clear position data since Art-Extractor exports may have null positions for manual placement
+            state.startPosition = null;
+            state.region = null;
+            state.selectingPosition = true;
+            
+            // For extracted images, ensure overlay is enabled but don't set position yet
+            try {
+              if (overlayManager && state.imageData) {
+                // Create image bitmap from the restored image data
+                const canvas = new OffscreenCanvas(state.imageData.width, state.imageData.height);
+                const ctx = canvas.getContext('2d');
+                const imageData = new ImageData(
+                  new Uint8ClampedArray(state.imageData.pixels), 
+                  state.imageData.width, 
+                  state.imageData.height
+                );
+                ctx.putImageData(imageData, 0, 0);
+                const imageBitmap = await canvas.transferToImageBitmap();
+                
+                await overlayManager.setImage(imageBitmap);
+                overlayManager.enable();
+                console.log('✅ Overlay enabled for extracted artwork');
+              }
+            } catch (overlayError) {
+              console.warn('⚠️ Could not set overlay for extracted artwork:', overlayError);
+            }
+            
+            // For extracted images, don't try to set overlay position until user selects one
+            // The overlay should already be enabled from the restoreProgress function
+            
+            // Update UI to show position selection needed
+            Utils.showAlert('Extracted artwork loaded! Click on the canvas to select where to place it.', 'success');
+            updateUI('ready', 'default'); // Use 'ready' instead of 'waitingPosition' to avoid translation issues
+            
+            // Enable relevant buttons
+            selectPosBtn.disabled = false;
+            if (state.colorsChecked) {
+              resizeBtn.disabled = false;
+            }
+            
+            // Set up position selection like the regular selectPosBtn
+            const tempFetch = async (url, options) => {
+              if (
+                typeof url === 'string' &&
+                url.includes('/s0/pixel/') &&
+                options &&
+                options.method === 'POST'
+              ) {
+                let coords;
+                try {
+                  const body = JSON.parse(options.body);
+                  coords = body.coords;
+                } catch (e) {
+                  return window.originalFetch(url, options);
+                }
+
+                const tileMatches = url.match(/\/s0\/pixel\/(\-?\d+)\/(\-?\d+)/);
+                if (tileMatches && coords && coords.length >= 2) {
+                  const tileX = parseInt(tileMatches[1]);
+                  const tileY = parseInt(tileMatches[2]);
+                  const pixelX = coords[0];
+                  const pixelY = coords[1];
+
+                  state.startPosition = { x: pixelX, y: pixelY };
+                  state.region = { x: tileX, y: tileY };
+                  state.selectingPosition = false;
+
+                  console.log('🎯 Position selected for extracted artwork:', { 
+                    startPosition: state.startPosition, 
+                    region: state.region 
+                  });
+
+                  // Restore original fetch
+                  window.fetch = window.originalFetch;
+
+                  // Update overlay position with validation
+                  try {
+                    if (state.startPosition && state.region && overlayManager) {
+                      await overlayManager.setPosition(state.startPosition, state.region);
+                      console.log('✅ Overlay position updated successfully');
+                    } else {
+                      console.warn('⚠️ Cannot set overlay position: missing startPosition or region');
+                    }
+                  } catch (positionError) {
+                    console.error('❌ Failed to set overlay position:', positionError);
+                  }
+
+                  startBtn.disabled = false;
+                  selectPosBtn.textContent = Utils.t('selectPosition');
+                  updateUI('ready', 'success');
+                  Utils.showAlert('Position selected! Ready to start painting.', 'success');
+                }
+              }
+              return window.originalFetch(url, options);
+            };
+
+            // Store original fetch and replace with position capture
+            if (!window.originalFetch) {
+              window.originalFetch = window.fetch;
+            }
+            window.fetch = tempFetch;
+          }
+          
+        } catch (error) {
+          console.error('❌ Failed to load extracted artwork:', error);
+          Utils.showAlert(`Failed to load extracted artwork: ${error.message}`, 'error');
+          updateUI('ready', 'default');
         }
       });
     }
@@ -5327,7 +5655,17 @@ function getText(key, params) {
                   };
                   state.lastPosition = { x: 0, y: 0 };
 
-                  await overlayManager.setPosition(state.startPosition, state.region);
+                  // Update overlay position with validation
+                  try {
+                    if (state.startPosition && state.region && overlayManager) {
+                      await overlayManager.setPosition(state.startPosition, state.region);
+                      console.log('✅ Regular overlay position updated successfully');
+                    } else {
+                      console.warn('⚠️ Cannot set regular overlay position: missing startPosition or region');
+                    }
+                  } catch (positionError) {
+                    console.error('❌ Failed to set regular overlay position:', positionError);
+                  }
 
                   if (state.imageLoaded) {
                     startBtn.disabled = false;
@@ -5374,7 +5712,7 @@ function getText(key, params) {
         const savedPaintedPixels = state.paintedPixels; // Store original value
         state.paintedPixels = 0;
         console.log(`🔄 First start this session - reset progress counter for accurate tracking (was: ${savedPaintedPixels})`);
-        updateStats(); // Update UI to show 0 progress
+        await updateStats(); // Update UI to show 0 progress
       } else {
         console.log('🔄 Continuing session - pre-filtering already done, keeping current progress');
       }
@@ -5407,6 +5745,8 @@ function getText(key, params) {
         } else {
           startBtn.disabled = true;
           uploadBtn.disabled = false;
+          const loadExtractedBtn = document.getElementById('loadExtractedBtn');
+          if (loadExtractedBtn) loadExtractedBtn.disabled = false;
           selectPosBtn.disabled = false;
           resizeBtn.disabled = false;
         }
@@ -5671,7 +6011,7 @@ function getText(key, params) {
     if (startFromX > 0 || startFromY > 0) {
       console.log(`🔄 Filtering coordinates to resume from position (${startFromX}, ${startFromY})`);
       let startIndex = -1;
-      
+
       // Find the starting position in the coordinate list
       for (let i = 0; i < coords.length; i++) {
         const [x, y] = coords[i];
@@ -5680,7 +6020,7 @@ function getText(key, params) {
           break;
         }
       }
-      
+
       if (startIndex >= 0) {
         // Resume from the found position (skip all previous coordinates)
         const filteredCoords = coords.slice(startIndex);
@@ -5711,18 +6051,18 @@ function getText(key, params) {
         state.paintedPixels++;
         Utils.markPixelPainted(p.x, p.y, pixelBatch.regionX, pixelBatch.regionY);
       });
-      
+
       // IMPORTANT: Decrement charges locally to match Acc-Switch.js behavior
       state.displayCharges = Math.max(0, state.displayCharges - batchSize);
       state.preciseCurrentCharges = Math.max(0, state.preciseCurrentCharges - batchSize);
-      
+
       state.fullChargeData = {
         ...state.fullChargeData,
         spentSinceShot: state.fullChargeData.spentSinceShot + batchSize,
       };
-      updateStats();
+      await updateStats();
       // Update account list with new charges
-      updateCurrentAccountInList();
+      await updateCurrentAccountInList();
       // Progress tracking removed from UI to reduce visual clutter
       Utils.performSmartSave();
 
@@ -5743,38 +6083,38 @@ function getText(key, params) {
 
   async function processImage() {
     console.log('🚀 Starting auto-swap enabled painting workflow');
-    
+
     try {
       // Main painting cycle - repeats until image complete or stopped
       while (!state.stopFlag) {
         console.log('📋 Phase 1: Starting painting session');
         const paintingResult = await executePaintingSession();
-        
+
         if (paintingResult === 'completed') {
           console.log('🎉 Image painting completed!');
           break;
         }
-        
+
         if (paintingResult === 'stopped') {
           console.log('⏹️ Painting stopped by user');
           break;
         }
-        
+
         if (paintingResult === 'charges_depleted') {
           if (!CONFIG.autoSwap) {
             // Original workflow: cooldown period
             console.log('⏱️ Phase 2: Entering cooldown period (auto-swap disabled)');
             const cooldownResult = await executeCooldownPeriod();
-            
+
             if (cooldownResult === 'stopped') {
               console.log('⏹️ Cooldown stopped by user');
               break;
             }
-            
+
             // Phase 3: Regenerate token for next painting session
             console.log('🔑 Phase 3: Regenerating token for next session');
             const tokenResult = await regenerateTokenForNewSession();
-            
+
             if (!tokenResult) {
               console.log('❌ Failed to regenerate token, stopping');
               state.stopFlag = true;
@@ -5783,16 +6123,16 @@ function getText(key, params) {
           } else {
             // Auto-swap workflow: simplified logic
             console.log('🔄 Auto-swap enabled: checking account switching options');
-            
+
             // Retrieve fresh accounts list each time to avoid stale data
             const accounts = JSON.parse(localStorage.getItem("accounts")) || [];
             console.log(`📊 Retrieved ${accounts.length} accounts from localStorage`);
-            
+
             if (accounts.length <= 1) {
               console.log('📋 Only one account available, using standard cooldown');
               const cooldownResult = await executeCooldownPeriod();
               if (cooldownResult === 'stopped') break;
-              
+
               const tokenResult = await regenerateTokenForNewSession();
               if (!tokenResult) {
                 state.stopFlag = true;
@@ -5800,15 +6140,16 @@ function getText(key, params) {
               }
             } else {
               // Debug current state
-              console.log(`📊 Account Status - Current Index: ${state.accountIndex}, Total: ${accounts.length}`);
-              
-              // Check if we're at the last account in the cycle
-              const isLastAccount = state.accountIndex >= accounts.length - 1;
-              console.log(`🔍 Is last account? ${isLastAccount} (index ${state.accountIndex} of ${accounts.length - 1})`);
-              
+              console.log(`📊 Account Status - Current ID: ${state.originalAccountOrder[state.currentActiveIndex]?.orderId}, Total IDs: ${state.originalAccountOrder.length}`);
+
+              // Check if we're at the last ID in the sequence
+              const isLastAccount = state.currentActiveIndex >= state.originalAccountOrder.length - 1;
+              console.log(`🔍 Is last ID? ${isLastAccount} (ID ${state.originalAccountOrder[state.currentActiveIndex]?.orderId} of ${state.originalAccountOrder.length})`);
+
               if (!isLastAccount) {
-                // Switch to next account immediately (no cooldown)
-                console.log(`🔄 Switching to next account (${state.accountIndex + 1}/${accounts.length})`);
+                // Switch to next ID immediately (no cooldown)
+                const nextId = state.originalAccountOrder[state.currentActiveIndex + 1]?.orderId;
+                console.log(`🔄 Switching to next ID ${nextId} (${state.currentActiveIndex + 2}/${state.originalAccountOrder.length})`);
                 const switchResult = await switchToNextAccount(accounts);
                 if (!switchResult) {
                   console.log('❌ Account switch failed, stopping');
@@ -5818,32 +6159,50 @@ function getText(key, params) {
                 // Continue painting with new account immediately
                 continue;
               } else {
-                // Last account reached - use cooldown then switch to first account
+                // Last account reached - use cooldown then switch to ID 1 (first account)
                 console.log('⏱️ Last account reached, entering cooldown period');
-                console.log(`📊 Current account index: ${state.accountIndex}, Total accounts: ${accounts.length}`);
-                
+                console.log(`📊 Current ID: ${state.originalAccountOrder[state.currentActiveIndex]?.orderId}, Last ID: ${state.originalAccountOrder[state.originalAccountOrder.length - 1]?.orderId}`);
+
                 const cooldownResult = await executeCooldownPeriod();
                 if (cooldownResult === 'stopped') break;
+
+                // After cooldown, switch to ID 1 (first account in order)
+                console.log('🔁 Cooldown complete, switching to ID 1 (first account)');
+                console.log(`🔄 Before switch - Current ID: ${state.originalAccountOrder[state.currentActiveIndex]?.orderId}, Target: ID 1`);
+
+                const firstAccountInfo = state.originalAccountOrder[0]; // ID 1 is always at index 0
+                const firstAccountToken = firstAccountInfo?.token;
                 
-                // After cooldown, switch to first account (index 0)
-                console.log('🔁 Cooldown complete, switching to first account');
-                console.log(`🔄 Before switch - Current index: ${state.accountIndex}, Target: 0`);
-                
-                const switchResult = await switchToSpecificAccount(accounts[0], 0);
-                if (!switchResult) {
-                  console.log('❌ Switch to first account failed, stopping');
+                if (!firstAccountToken) {
+                  console.log('❌ First account (ID 1) token not found, stopping');
                   state.stopFlag = true;
                   break;
                 }
+
+                // Reset to first position (ID 1)
+                state.currentActiveIndex = 0;
                 
-                console.log(`✅ Successfully switched to first account. New index: ${state.accountIndex}`);
+                // Update accountIndex to match the position in accounts array
+                const accountsIndex = accounts.findIndex(token => token === firstAccountToken);
+                if (accountsIndex !== -1) {
+                  state.accountIndex = accountsIndex;
+                }
+
+                const switchResult = await switchToSpecificAccount(firstAccountToken, 0);
+                if (!switchResult) {
+                  console.log('❌ Switch to ID 1 failed, stopping');
+                  state.stopFlag = true;
+                  break;
+                }
+
+                console.log(`✅ Successfully switched to ID 1 (${firstAccountInfo.displayName}). Cycle restarted.`);
                 // Continue painting with first account
                 continue;
               }
             }
           }
         }
-        
+
         console.log('🔄 Cycle complete, starting next painting session');
       }
     } finally {
@@ -5860,7 +6219,7 @@ function getText(key, params) {
 
     // Check if we're working with restored data by looking for existing availableColors
     const isRestoredData = state.availableColors && state.availableColors.length > 0 && state.colorsChecked;
-    
+
     if (!isRestoredData) {
       // Wait for original tiles to load if needed
       const tilesReady = await overlayManager.waitForTiles(
@@ -5894,7 +6253,7 @@ function getText(key, params) {
     state.displayCharges = Math.floor(initialChargeCheck.charges);
     state.preciseCurrentCharges = initialChargeCheck.charges;
     state.cooldown = initialChargeCheck.cooldown;
-
+    await updateStats();
     if (state.displayCharges <= 0) {
       console.log('⚡ No charges available, skipping painting session');
       return 'charges_depleted';
@@ -5919,26 +6278,27 @@ function getText(key, params) {
       // OPTIMIZATION: Pre-filter already painted pixels (happens only once per session)
       let eligibleCoords = [];
       let alreadyPaintedCount = 0;
-      
+
       // Log resume information if applicable
       if (state.lastPosition.x > 0 || state.lastPosition.y > 0) {
         console.log(`🔄 Resuming painting from position (${state.lastPosition.x}, ${state.lastPosition.y})`);
         console.log(`📊 Current progress: ${state.paintedPixels} pixels painted`);
       }
-      
+
       if (!state.preFilteringDone) {
         console.log('🔍 Pre-filtering already painted pixels (one-time detection for this session)...');
-        
+
         for (const [x, y] of coords) {
           const targetPixelInfo = checkPixelEligibility(x, y);
-          
+
           if (!targetPixelInfo.eligible) {
             if (targetPixelInfo.reason !== 'alreadyPainted') {
               skippedPixels[targetPixelInfo.reason]++;
+
             }
             continue;
           }
-          
+
           // Check if already painted (only once per session)
           let absX = startX + x;
           let absY = startY + y;
@@ -5946,7 +6306,7 @@ function getText(key, params) {
           let adderY = Math.floor(absY / 1000);
           let pixelX = absX % 1000;
           let pixelY = absY % 1000;
-          
+
           try {
             const tilePixelRGBA = await overlayManager.getTilePixelColor(
               regionX + adderX,
@@ -5973,20 +6333,20 @@ function getText(key, params) {
           } catch (e) {
             // If we can't check, include the pixel (better to attempt than skip)
           }
-          
+
           // Add eligible unpainted pixel to list
           eligibleCoords.push([x, y, targetPixelInfo]);
         }
-        
+
         // Mark pre-filtering as done for this session
         state.preFilteringDone = true;
-        
+
         // Log pre-filtering results
         if (alreadyPaintedCount > 0) {
           console.log(`✓ Pre-filter complete: ${alreadyPaintedCount} already painted pixels detected and added to progress`);
           console.log('ℹ️ This detection will not happen again until a new image/save is loaded');
           // Update UI to reflect the new progress immediately
-          updateStats();
+          await updateStats();
         }
         skippedPixels.alreadyPainted = alreadyPaintedCount;
       } else {
@@ -5994,14 +6354,14 @@ function getText(key, params) {
         console.log('🔍 Using existing pre-filter results (already done this session)');
         for (const [x, y] of coords) {
           const targetPixelInfo = checkPixelEligibility(x, y);
-          
+
           if (!targetPixelInfo.eligible) {
             if (targetPixelInfo.reason !== 'alreadyPainted') {
               skippedPixels[targetPixelInfo.reason]++;
             }
             continue;
           }
-          
+
           // Only include pixels that haven't been marked as painted yet
           if (!Utils.isPixelPainted(x, y)) {
             eligibleCoords.push([x, y, targetPixelInfo]);
@@ -6023,13 +6383,21 @@ function getText(key, params) {
 
         // Check if we have charges left (local count, no API call)
         if (state.displayCharges <= 0) {
-          console.log('⚡ No charges left (local count), ending painting session');
-          if (pixelBatch && pixelBatch.pixels.length > 0) {
-            console.log(`🎯 Sending final batch with ${pixelBatch.pixels.length} pixels`);
-            await flushPixelBatch(pixelBatch);
+          // console.log("Try to buy paint charges");
+          // await purchase("paint_charges");
+          await updateStats();
+          if (state.displayCharges <= 0) {
+            console.log('⚡ No charges left (local count), ending painting session');
+            if (pixelBatch && pixelBatch.pixels.length > 0) {
+              console.log(`🎯 Sending final batch with ${pixelBatch.pixels.length} pixels`);
+              await flushPixelBatch(pixelBatch);
+            }
+            state.lastPosition = { x, y };
+            return 'charges_depleted';
           }
-          state.lastPosition = { x, y };
-          return 'charges_depleted';
+          // else {
+          //   console.log(`🔋 Charges after purchase: ${state.displayCharges}, continuing painting`);
+          // }
         }
 
         let absX = startX + x;
@@ -6056,7 +6424,7 @@ function getText(key, params) {
               state.stopFlag = true;
               return 'stopped';
             }
-            updateStats();
+            await updateStats();
           }
 
           pixelBatch = {
@@ -6086,7 +6454,7 @@ function getText(key, params) {
             return 'stopped';
           }
           pixelBatch.pixels = [];
-          updateStats();
+          await updateStats();
         }
       }
 
@@ -6125,7 +6493,7 @@ function getText(key, params) {
 
     while (!state.stopFlag) {
       chargeCheckCount++;
-      
+
       const { charges, cooldown } = await WPlaceService.getCharges();
       state.displayCharges = Math.floor(charges);
       state.preciseCurrentCharges = charges;
@@ -6134,7 +6502,7 @@ function getText(key, params) {
       if (state.displayCharges >= state.cooldownChargeThreshold) {
         console.log(`✅ Cooldown target reached: ${state.displayCharges}/${state.cooldownChargeThreshold}`);
         NotificationManager.maybeNotifyChargesReached(true);
-        updateStats();
+        await updateStats();
         return 'target_reached';
       }
 
@@ -6148,7 +6516,7 @@ function getText(key, params) {
       // Smart delay calculation to reduce API calls
       const chargesNeeded = state.cooldownChargeThreshold - state.displayCharges;
       const estimatedWaitTime = chargesNeeded * state.cooldown;
-      
+
       // Use longer delays during cooldown to prevent rate limiting
       let delayTime;
       if (chargeCheckCount < 3) {
@@ -6181,16 +6549,16 @@ function getText(key, params) {
   // Phase 3: Regenerate token for new painting session
   async function regenerateTokenForNewSession() {
     console.log('🔑 Regenerating token for new painting session');
-    
+
     try {
       // Force regenerate token for new session
       await ensureToken(true); // forceRefresh = true
-      
+
       if (!getTurnstileToken()) {
         console.error('❌ Failed to generate token for new session');
         return false;
       }
-      
+
       console.log('✅ Token regenerated successfully for new session');
       return true;
     } catch (error) {
@@ -6202,7 +6570,7 @@ function getText(key, params) {
   // Finalize painting process cleanup
   async function finalizePaintingProcess() {
     console.log('🧹 Finalizing painting process');
-    
+
     if (window._chargesInterval) {
       clearInterval(window._chargesInterval);
       window._chargesInterval = null;
@@ -6406,12 +6774,12 @@ function getText(key, params) {
           data = await res.json();
         } catch (_) { }
         console.error('❌ 403 Forbidden. Token invalid during painting - regeneration allowed.');
-        
+
         // 403 errors during painting allow token regeneration per workflow requirements
         console.log('� Token invalid (403) during painting - regenerating token as allowed by workflow');
         setTurnstileToken(null);
         createTokenPromise();
-        
+
         // Attempt to regenerate token immediately
         const newToken = await ensureToken(true);
         if (newToken) {
@@ -6724,6 +7092,14 @@ function getText(key, params) {
       console.log('✅ Upload Image button enabled after initial setup');
     }
 
+    // Enable Load Extracted button at the same time as Upload button
+    const loadExtractedBtn = document.getElementById('loadExtractedBtn');
+    if (loadExtractedBtn) {
+      loadExtractedBtn.disabled = false;
+      loadExtractedBtn.title = '';
+      console.log('✅ Load Extracted button enabled after initial setup');
+    }
+
     // Show a notification that file operations are now available
     Utils.showAlert(Utils.t('fileOperationsAvailable'), 'success');
   }
@@ -6965,30 +7341,30 @@ function getText(key, params) {
       console.error("An error occurred during the purchase:", e);
     }
   }
-  function swapAccountTrigger(token) {
+  async function swapAccountTrigger(token) {
     // STRICT GUARD: Only allow account switching during active painting sessions OR controlled refresh
     if (!state.running && !state.isFetchingAllAccounts) {
       console.warn('🔒 Account switching blocked - only allowed during active painting or controlled refresh');
       console.warn('🔒 Current state.running:', state.running, 'state.isFetchingAllAccounts:', state.isFetchingAllAccounts);
       return false;
     }
-    
+
     localStorage.removeItem("lp");
     if (!token) {
       console.error('❌ Cannot swap account: token is null or undefined');
       return false;
     }
-    
+
     console.log(`🔄 Triggering account swap with token: ${token.substring(0, 20)}...`);
     console.log('📤 Sending setCookie message to extension...');
-    
+
     try {
       window.postMessage({
         source: 'my-userscript',
         type: 'setCookie',
         value: token
       }, '*');
-      
+
       console.log('✅ setCookie message sent successfully');
       return true;
     } catch (error) {
@@ -7034,7 +7410,7 @@ function getText(key, params) {
       Utils.showAlert("Already fetching account details.", "warning");
       return;
     }
-    
+
     state.isFetchingAllAccounts = true;
 
     const refreshBtn = document.getElementById('refreshAllAccountsBtn');
@@ -7076,16 +7452,16 @@ function getText(key, params) {
       // Temporarily disable the strict guard for controlled refresh operation
       const originalRunningState = state.running;
       state.running = true; // Temporarily enable to allow controlled switching
-      
+
       console.log('🔓 Temporarily enabling controlled account switching for refresh');
 
       for (let i = 0; i < accountsTokens.length; i++) {
         const token = accountsTokens[i];
-        
+
         console.log(`📋 Fetching details for account ${i + 1}/${accountsTokens.length}`);
-        
+
         // Controlled account switch for data fetching
-        const swapResult = swapAccountTrigger(token);
+        const swapResult = await swapAccountTrigger(token);
         if (!swapResult) {
           console.warn(`⚠️ Failed to trigger swap for account ${i + 1}`);
           continue;
@@ -7095,7 +7471,7 @@ function getText(key, params) {
         let retries = 0;
         let accountData = null;
         while (retries < 8 && !accountData) {
-          await Utils.sleep(1000);
+          // await Utils.sleep(1000);
           try {
             const fetchedInfo = await WPlaceService.fetchCheck();
             const chargesInfo = await WPlaceService.getCharges();
@@ -7116,14 +7492,14 @@ function getText(key, params) {
         if (accountData) {
           const actualName = accountData.Username || accountData.name || `User${accountData.ID}`;
           const isCurrentAccount = accountData.ID === originalAccountData.id;
-          
+
           state.allAccountsInfo.push({
             ...accountData,
             token,
             displayName: actualName,
             isCurrent: isCurrentAccount
           });
-          
+
           console.log(`✅ Fetched details for: ${actualName} (${accountData.Charges}/${accountData.Max} charges)`);
         } else {
           // Fallback for failed accounts
@@ -7137,14 +7513,14 @@ function getText(key, params) {
           });
           console.warn(`❌ Failed to fetch details for account ${i + 1}`);
         }
-        
+
         renderAccountsList();
       }
 
       // Restore original state and switch back to original account
       state.running = originalRunningState;
       console.log('🔒 Restored original running state and switching back to original account');
-      
+
     } catch (error) {
       console.error("Error fetching all account details:", error);
       if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="color: red;">Error loading accounts.</div>`;
@@ -7154,10 +7530,10 @@ function getText(key, params) {
         console.log('🔄 Switching back to original account...');
         const originalRunningState = state.running;
         state.running = true; // Temporarily enable for switch back
-        
-        swapAccountTrigger(originalToken);
+
+        await swapAccountTrigger(originalToken);
         await Utils.sleep(2000);
-        
+
         // Verify we're back on the original account
         try {
           const verifyData = await WPlaceService.getCharges();
@@ -7167,7 +7543,7 @@ function getText(key, params) {
         } catch (e) {
           console.warn('⚠️ Could not verify switch back to original account');
         }
-        
+
         state.running = originalRunningState; // Restore state
       }
 
@@ -7182,12 +7558,54 @@ function getText(key, params) {
         }
       }
 
-      // Sort accounts to place current account first
-      state.allAccountsInfo.sort((a, b) => {
-        if (a.isCurrent && !b.isCurrent) return -1;
-        if (!a.isCurrent && b.isCurrent) return 1;
-        return 0;
-      });
+      // Keep original account order - do NOT rearrange the array
+      // Instead, assign IDs based on current account being ID 1
+      const currentAccountIndex = state.allAccountsInfo.findIndex(acc => acc.isCurrent);
+      
+      if (currentAccountIndex !== -1) {
+        console.log(`🎯 Current account found at array position ${currentAccountIndex}`);
+        
+        // Assign IDs: current account gets ID 1, others get sequential IDs
+        state.allAccountsInfo.forEach((acc, index) => {
+          if (acc.isCurrent) {
+            acc.orderId = 1; // Current account always gets ID 1
+          } else {
+            // Other accounts get IDs based on their position relative to current
+            const relativePosition = index > currentAccountIndex ? 
+              (index - currentAccountIndex + 1) : 
+              (state.allAccountsInfo.length - currentAccountIndex + index + 1);
+            acc.orderId = relativePosition;
+          }
+        });
+        
+        // Sort the display order by orderId for UI, but keep original array intact
+        const sortedForDisplay = [...state.allAccountsInfo].sort((a, b) => a.orderId - b.orderId);
+        
+        // Create the switching order array (ID 1 first, then sequential)
+        state.originalAccountOrder = sortedForDisplay;
+        
+        // Find the current account's position in the switching order (should be 0 since it's ID 1)
+        state.currentActiveIndex = 0; // Current account (ID 1) is always first in switching order
+        state.accountIndex = currentAccountIndex; // Keep track of original array position
+        
+        console.log(`📋 Account IDs assigned:`);
+        state.allAccountsInfo.forEach((acc) => {
+          console.log(`  Array pos ${state.allAccountsInfo.indexOf(acc)}: ID ${acc.orderId} - ${acc.displayName}${acc.isCurrent ? ' (CURRENT)' : ''}`);
+        });
+        
+        console.log(`📋 Switching order (by ID):`);
+        state.originalAccountOrder.forEach((acc, idx) => {
+          console.log(`  Switch pos ${idx}: ID ${acc.orderId} - ${acc.displayName}${acc.isCurrent ? ' (CURRENT)' : ''}`);
+        });
+      } else {
+        console.warn('⚠️ No current account found, using original order');
+        state.allAccountsInfo.forEach((acc, index) => {
+          acc.orderId = index + 1;
+        });
+        state.originalAccountOrder = [...state.allAccountsInfo];
+        state.currentActiveIndex = 0;
+        state.accountIndex = 0;
+      }
 
       await updateStats();
       renderAccountsList();
@@ -7197,18 +7615,22 @@ function getText(key, params) {
         refreshBtn.innerHTML = '<i class="fas fa-users-cog"></i>';
         refreshBtn.disabled = false;
       }
-      
+
       console.log('✅ Account list refresh completed with full details');
     }
   }
 
   // Function to update current account charges in the account list
-  function updateCurrentAccountInList() {
+  async function updateCurrentAccountInList() {
     if (state.allAccountsInfo.length === 0) return;
-    
+
     // Find current account in the list and update its charges
     const currentAccountInList = state.allAccountsInfo.find(acc => acc.isCurrent);
     if (currentAccountInList) {
+      const { charges, cooldown } = await WPlaceService.getCharges();
+      state.displayCharges = Math.floor(charges);
+      state.preciseCurrentCharges = charges;
+      await updateStats();
       currentAccountInList.Charges = Math.floor(state.displayCharges || state.preciseCurrentCharges || 0);
       currentAccountInList.Max = state.maxCharges;
       // Re-render the account list to show updated charges
@@ -7219,37 +7641,40 @@ function getText(key, params) {
   // Function to update current account spotlight when switching during painting
   async function updateCurrentAccountSpotlight() {
     if (state.allAccountsInfo.length === 0) return;
-    
+    await Utils.sleep(500); // Wait a bit for the switch to take effect
     try {
-      // Get current account info
       const currentAccountData = await WPlaceService.getCharges();
-      const currentAccountInfo = await WPlaceService.fetchCheck();
+      console.log("Current account after switch:", currentAccountData);
+      console.log(`🔍 Switched to account with ID: ${currentAccountData.id}`);
       
       // Update all accounts to not be current
       state.allAccountsInfo.forEach(acc => acc.isCurrent = false);
-      
-      // Find and mark the new current account
+
+      // Find and mark the new current account in the original array
       const newCurrentAccount = state.allAccountsInfo.find(acc => acc.ID === currentAccountData.id);
       if (newCurrentAccount) {
+        const currentAccountInfo = await WPlaceService.fetchCheck();
         newCurrentAccount.isCurrent = true;
         newCurrentAccount.Charges = Math.floor(currentAccountData.charges);
         newCurrentAccount.Max = Math.floor(currentAccountData.max);
         newCurrentAccount.Droplets = Math.floor(currentAccountData.droplets);
         newCurrentAccount.displayName = currentAccountInfo.Username || currentAccountInfo.name || newCurrentAccount.displayName;
+
+        console.log(`🎯 Updated current account spotlight: ${newCurrentAccount.displayName} (ID ${newCurrentAccount.orderId})`);
         
-        console.log(`🎯 Updated current account spotlight: ${newCurrentAccount.displayName}`);
+        // Update the switching order array to reflect the current account change
+        const switchingOrderIndex = state.originalAccountOrder.findIndex(acc => acc.orderId === newCurrentAccount.orderId);
+        if (switchingOrderIndex !== -1) {
+          state.originalAccountOrder[switchingOrderIndex] = newCurrentAccount;
+          // DON'T update currentActiveIndex here - it's managed by switchToNextAccount()
+          console.log(`🎯 Updated account data at switching order index ${switchingOrderIndex} (ID ${newCurrentAccount.orderId})`);
+          console.log(`📊 Current state: activeIndex=${state.currentActiveIndex}, expectedIndex=${switchingOrderIndex}`);
+        }
       }
-      
-      // Sort to place current account first
-      state.allAccountsInfo.sort((a, b) => {
-        if (a.isCurrent && !b.isCurrent) return -1;
-        if (!a.isCurrent && b.isCurrent) return 1;
-        return 0;
-      });
-      
+
       // Re-render the account list to show new current account
       renderAccountsList();
-      
+
     } catch (error) {
       console.warn('⚠️ Failed to update account spotlight:', error);
     }
@@ -7265,14 +7690,49 @@ function getText(key, params) {
       return;
     }
 
-    state.allAccountsInfo.forEach((info, index) => {
+    // Render accounts in switching order (sorted by orderId)
+    state.originalAccountOrder.forEach((info, switchIndex) => {
       const item = document.createElement('div');
-      item.className = `wplace-account-item ${info.isCurrent ? 'is-current' : ''}`;
+      
+      // Determine if this is the current account or next in sequence
+      const isCurrentAccount = info.isCurrent;
+      const isNextInSequence = state.currentActiveIndex !== -1 && 
+        ((state.currentActiveIndex + 1) % state.originalAccountOrder.length) === switchIndex;
+      
+      let itemClasses = 'wplace-account-item';
+      if (isCurrentAccount) {
+        itemClasses += ' current';
+      } else if (isNextInSequence) {
+        itemClasses += ' next-in-sequence';
+      }
+      
+      item.className = itemClasses;
 
-      // Create ordering number element
+      // Create ordering number element with order ID
       const orderNumber = document.createElement('div');
       orderNumber.className = 'wplace-account-number';
-      orderNumber.textContent = index + 1;
+      orderNumber.textContent = info.orderId; // Always show the assigned order ID
+      
+      // Add visual indicator for current position in sequence
+      if (isCurrentAccount) {
+        orderNumber.style.background = '#2ecc71'; // Green color
+        orderNumber.style.color = 'white';
+        orderNumber.style.boxShadow = '0 0 10px rgba(46, 204, 113, 0.8)';
+        orderNumber.title = `Order ID ${info.orderId} - Currently active account`;
+        
+        // Add a subtle pulsing effect to the account number for extra visibility
+        orderNumber.style.animation = 'currentAccountNumberPulse 1.5s ease-in-out infinite alternate';
+      } else if (isNextInSequence) {
+        orderNumber.style.background = '#f39c12'; // Orange color
+        orderNumber.style.color = 'white';
+        orderNumber.style.boxShadow = '0 0 8px rgba(243, 156, 18, 0.6)';
+        orderNumber.title = `Order ID ${info.orderId} - Next account in switching sequence`;
+      } else {
+        orderNumber.style.background = ''; // Reset to default
+        orderNumber.style.boxShadow = ''; // Remove any glow
+        orderNumber.title = `Order ID ${info.orderId}`;
+        orderNumber.style.animation = ''; // Remove any animation
+      }
 
       const displayName = info.displayName || `Account ${index + 1}`;
 
@@ -7308,55 +7768,96 @@ function getText(key, params) {
 
   // Account switching helper functions
   async function switchToNextAccount(accounts) {
-    const previousIndex = state.accountIndex;
-    state.accountIndex = (state.accountIndex + 1) % accounts.length;
+    const previousActiveIndex = state.currentActiveIndex;
     
-    // Get account names for better logging
-    const prevAccountInfo = state.allAccountsInfo && state.allAccountsInfo[previousIndex] 
-      ? state.allAccountsInfo[previousIndex].displayName 
-      : `Account ${previousIndex + 1}`;
-    const nextAccountInfo = state.allAccountsInfo && state.allAccountsInfo[state.accountIndex] 
-      ? state.allAccountsInfo[state.accountIndex].displayName 
-      : `Account ${state.accountIndex + 1}`;
+    // Move to next account in strict ID order (next position in switching order)
+    const nextIndex = (state.currentActiveIndex + 1) % state.originalAccountOrder.length;
     
-    console.log(`🔄 Switching from account ${previousIndex + 1} (${prevAccountInfo}) to account ${state.accountIndex + 1} (${nextAccountInfo}) (${state.accountIndex + 1}/${accounts.length})`);
+    // Get the account info from switching order
+    const nextAccountInfo = state.originalAccountOrder[nextIndex];
+    const prevAccountInfo = state.originalAccountOrder[previousActiveIndex];
     
-    const nextToken = accounts[state.accountIndex];
-    console.log(`🔑 Next token: ${nextToken ? nextToken.substring(0, 20) + '...' : 'INVALID'}`);
+    // Strict validation: ensure ID 1 always goes to ID 2
+    if (prevAccountInfo?.orderId === 1 && nextAccountInfo?.orderId !== 2) {
+      console.error(`❌ STRICT ORDER VIOLATION: ID 1 must switch to ID 2, but found ID ${nextAccountInfo?.orderId}`);
+      // Find ID 2 account
+      const id2Account = state.originalAccountOrder.find(acc => acc.orderId === 2);
+      if (id2Account) {
+        const id2Index = state.originalAccountOrder.indexOf(id2Account);
+        console.log(`🔄 Correcting: Forcing switch from ID 1 to ID 2 (index ${id2Index})`);
+        state.currentActiveIndex = id2Index;
+      } else {
+        console.error(`❌ FATAL: No ID 2 account found in switching order!`);
+        return false;
+      }
+    } else {
+      state.currentActiveIndex = nextIndex;
+    }
     
-    if (!nextToken) {
-      console.warn('⚠️ Invalid token, skipping...');
+    // Re-get account info after potential correction
+    const finalNextAccountInfo = state.originalAccountOrder[state.currentActiveIndex];
+    
+    console.log(`🔄 Switching from ID ${prevAccountInfo?.orderId} (${prevAccountInfo?.displayName || 'Unknown'}) to ID ${finalNextAccountInfo?.orderId} (${finalNextAccountInfo?.displayName || 'Unknown'})`);
+    console.log(`📍 Index progression: ${previousActiveIndex} → ${state.currentActiveIndex} (order: ${prevAccountInfo?.orderId} → ${finalNextAccountInfo?.orderId})`);
+    
+    // Find the token for this account by matching the account in the original allAccountsInfo array
+    const originalAccountIndex = state.allAccountsInfo.findIndex(acc => acc.orderId === finalNextAccountInfo?.orderId);
+    if (originalAccountIndex === -1) {
+      console.warn(`⚠️ Could not find account with ID ${finalNextAccountInfo?.orderId} in original array`);
       return false;
     }
     
-    return await switchToSpecificAccount(nextToken, state.accountIndex);
+    const nextToken = finalNextAccountInfo?.token;
+    console.log(`🔑 Next token for ID ${finalNextAccountInfo?.orderId}: ${nextToken ? nextToken.substring(0, 20) + '...' : 'INVALID'}`);
+    console.log(`🔍 Expected account: ${finalNextAccountInfo?.displayName} (ID ${finalNextAccountInfo?.orderId})`);
+    
+    if (!nextToken) {
+      console.warn(`⚠️ Invalid token for ID ${finalNextAccountInfo?.orderId}, skipping...`);
+      return false;
+    }
+    
+    // Update accountIndex to match the position in the accounts token array
+    const accountsIndex = accounts.findIndex(token => token === nextToken);
+    if (accountsIndex !== -1) {
+      state.accountIndex = accountsIndex;
+      console.log(`🔗 Found token at accounts array index: ${accountsIndex}`);
+      console.log(`🔍 Token from accounts[${accountsIndex}]: ${accounts[accountsIndex].substring(0, 20)}...`);
+    } else {
+      console.warn(`⚠️ Token not found in accounts array for ID ${finalNextAccountInfo?.orderId}`);
+      console.warn(`🔍 Available accounts tokens: ${accounts.map((t, i) => `[${i}] ${t.substring(0, 20)}...`).join(', ')}`);
+      return false;
+    }
+    
+    return await switchToSpecificAccount(nextToken, state.currentActiveIndex);
   }
 
-  async function switchToSpecificAccount(token, accountIndex) {
-    // Get account name for better logging
-    const accountInfo = state.allAccountsInfo && state.allAccountsInfo[accountIndex] 
-      ? state.allAccountsInfo[accountIndex].displayName 
-      : `Account ${accountIndex + 1}`;
-    
-    console.log(`🔄 Attempting to switch to account at index ${accountIndex} (${accountInfo})`);
+  async function switchToSpecificAccount(token, originalOrderIndex) {
+    // Get account name and ID for better logging
+    const accountInfo = state.originalAccountOrder && state.originalAccountOrder[originalOrderIndex]
+      ? state.originalAccountOrder[originalOrderIndex]
+      : null;
+    const accountName = accountInfo?.displayName || `Account ${originalOrderIndex + 1}`;
+    const accountId = accountInfo?.orderId || (originalOrderIndex + 1);
+
+    console.log(`🔄 Attempting to switch to ID ${accountId} (${accountName})`);
     console.log(`🔑 Using token: ${token.substring(0, 20)}...`);
-    
-    swapAccountTrigger(token);
-    
+
+    await swapAccountTrigger(token);
+
     // Give more time for the initial swap to process (like Acc-Switch.js)
-    console.log('⏳ Waiting 5 seconds for initial swap processing...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
+    // console.log('⏳ Waiting 5 seconds for initial swap processing...');
+    // await new Promise(resolve => setTimeout(resolve, 5000));
+
     let maxRetries = 20; // Match Acc-Switch.js retry count
     let retryCount = 0;
     let swapSuccess = false;
-    
+
     while (!swapSuccess && retryCount < maxRetries) {
       console.log(`⏳ Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
-      
+
       // Wait for a short period before checking (like Acc-Switch.js)
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       try {
         // Use the same verification method as Acc-Switch.js
         await fetchAccount();
@@ -7365,32 +7866,32 @@ function getText(key, params) {
       } catch (error) {
         console.warn('❌ Account swap not yet successful. Retrying...', error);
         retryCount++;
-        
+
         // Re-trigger swap every 5 attempts
         if (retryCount % 5 === 0) {
           console.log('🔄 Re-triggering account swap...');
-          swapAccountTrigger(token);
+          await swapAccountTrigger(token);
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
     }
-    
+
     if (swapSuccess) {
       const { charges, cooldown } = await WPlaceService.getCharges();
       state.displayCharges = Math.floor(charges);
       state.preciseCurrentCharges = charges;
       state.cooldown = cooldown;
-      state.accountIndex = accountIndex;
+      // Don't update state.accountIndex here as it should be managed by the calling function
       Utils.performSmartSave();
-      updateStats();
-      
+      await updateStats();
+
       // Update account list spotlight to show new current account
       await updateCurrentAccountSpotlight();
-      
-      console.log(`✅ Successfully switched to account ${accountIndex + 1} (${accountInfo}) with ${Math.floor(charges)} charges`);
+
+      console.log(`✅ Successfully switched to ID ${accountId} (${accountName}) with ${Math.floor(charges)} charges`);
       return true;
     } else {
-      console.error(`❌ Failed to swap to account ${accountIndex + 1} (${accountInfo}) after multiple retries.`);
+      console.error(`❌ Failed to swap to ID ${accountId} (${accountName}) after multiple retries.`);
       return false;
     }
   }
@@ -7400,7 +7901,7 @@ function getText(key, params) {
     // Wait for all global managers to be available
     let attempts = 0;
     const maxAttempts = 50; // 5 seconds max wait
-    
+
     while (attempts < maxAttempts) {
       const managers = {
         utilsManager: window.globalUtilsManager,
@@ -7408,21 +7909,21 @@ function getText(key, params) {
         overlayManager: window.globalOverlayManager,
         tokenManager: window.globalTokenManager
       };
-      
+
       const missingManagers = Object.entries(managers)
         .filter(([name, manager]) => !manager)
         .map(([name]) => name);
-        
+
       if (missingManagers.length === 0) {
         console.log('✅ All global managers are available, initializing UI...');
         break;
       }
-      
+
       console.log(`⏳ Waiting for managers: ${missingManagers.join(', ')} (attempt ${attempts + 1}/${maxAttempts})`);
       await new Promise(resolve => setTimeout(resolve, 100));
       attempts++;
     }
-    
+
     if (attempts >= maxAttempts) {
       console.warn('⚠️ Some global managers not available after waiting, proceeding anyway...');
       console.log('Available managers:', {
@@ -7432,10 +7933,10 @@ function getText(key, params) {
         tokenManager: !!window.globalTokenManager
       });
     }
-    
+
     return createUI();
   }
-  
+
   waitForDependenciesAndInitialize().then(() => {
     // Generate token automatically after UI is ready
     setTimeout(initializeTokenGenerator, 1000);
