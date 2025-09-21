@@ -713,7 +713,7 @@
   border-radius: 0 !important;
   padding: 20px;
   z-index: 10000;
-  box-shadow: 0 0 20px var(--wplace-text), inset 0 0 20px rgba(129, 220, 247, 0.1) !important;
+  box-shadow: 0 0 20px var(--wplace-text), inset 0 0 20px rgba(248, 169, 253, 0.1) !important;
   min-width: 200px;
   text-align: center;
   font-family: var(--wplace-font) !important;
@@ -727,7 +727,7 @@
   text-transform: uppercase;
   text-shadow: 0 0 10px var(--wplace-text) !important;
   font-family: var(--wplace-font) !important;
-  animation: cyan-pulse 2s infinite;
+  animation: purple-pulse 2s infinite;
 }
 
 .wplace-theme-neon-purple .wplace-move-controls {
@@ -754,7 +754,7 @@
 .wplace-theme-neon-purple .wplace-move-btn:hover {
   background: var(--wplace-accent) !important;
   box-shadow: 0 0 15px var(--wplace-text) !important;
-  animation: cyan-flicker 0.5s infinite;
+  animation: purple-flicker 0.5s infinite;
 }
 
 .wplace-theme-neon-purple .wplace-move-center {
