@@ -6574,6 +6574,43 @@ function getText(key, params) {
         let pixelX = absX % 1000;
         let pixelY = absY % 1000;
 
+        // CRITICAL FIX: Check if pixel is already painted (both locally and on canvas)
+        if (Utils.isPixelPainted(x, y, regionX + adderX, regionY + adderY)) {
+          console.log(`⏭️ Skipping already painted pixel at (${x}, ${y}) - marked in local map`);
+          continue; // Skip already painted pixels
+        }
+
+        // REAL-TIME CANVAS CHECK: Like Acc-Switch, verify against actual canvas state
+        try {
+          const existingColorRGBA = await overlayManager.getTilePixelColor(
+            regionX + adderX,
+            regionY + adderY,
+            pixelX,
+            pixelY
+          ).catch(() => null);
+
+          if (existingColorRGBA && Array.isArray(existingColorRGBA)) {
+            const [er, eg, eb] = existingColorRGBA;
+            const existingMappedColor = Utils.resolveColor(
+              [er, eg, eb],
+              state.availableColors,
+              !state.paintUnavailablePixels
+            );
+            const isAlreadyPainted = existingMappedColor.id === targetPixelInfo.mappedColorId;
+            
+            if (isAlreadyPainted) {
+              console.log(`⏭️ Skipping already painted pixel at (${x}, ${y}) - verified on canvas (existing: ${existingMappedColor.id}, target: ${targetPixelInfo.mappedColorId})`);
+              // Mark it as painted in local map to avoid future checks
+              Utils.markPixelPainted(x, y, regionX + adderX, regionY + adderY);
+              state.paintedPixels++;
+              continue; // Skip already painted pixels
+            }
+          }
+        } catch (e) {
+          // If we can't check the canvas, proceed with painting (better to attempt than skip)
+          console.warn(`⚠️ Could not verify canvas state for pixel (${x}, ${y}), proceeding with paint:`, e.message);
+        }
+
         const targetMappedColorId = targetPixelInfo.mappedColorId;
 
         // Set up pixel batch for new region if needed
