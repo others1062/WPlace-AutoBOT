@@ -1919,6 +1919,9 @@ function getText(key, params) {
 
   async function createUI() {
     await detectLanguage();
+    
+    // Load bot settings before creating UI so values are available
+    loadBotSettings();
 
     const existingContainer = document.getElementById('wplace-image-bot-container');
     const existingStats = document.getElementById('wplace-stats-container');
@@ -3588,6 +3591,14 @@ function getText(key, params) {
         console.log(`🔄 Coordinate mode changed to: ${state.coordinateMode}`);
         Utils.showAlert(`Coordinate mode set to: ${state.coordinateMode}`, 'success');
       });
+      
+      // Update coordinate UI after setting up the event listener
+      Utils.updateCoordinateUI({
+        mode: state.coordinateMode,
+        directionControls,
+        snakeControls,
+        blockControls,
+      });
     }
 
     if (coordinateDirectionSelect) {
@@ -3626,13 +3637,21 @@ function getText(key, params) {
 
     if (blockHeightInput) {
       blockHeightInput.value = state.blockHeight;
-      blockHeightInput.addEventListener('change', (e) => {
+      blockHeightInput.addEventListener('input', (e) => {
         const height = parseInt(e.target.value);
         if (height >= 1 && height <= 50) {
           state.blockHeight = height;
           saveBotSettings();
         }
       });
+    }
+
+    // Patch block size inputs with saved values after UI creation
+    if (blockWidthInput) {
+      blockWidthInput.value = state.blockWidth;
+    }
+    if (blockHeightInput) {
+      blockHeightInput.value = state.blockHeight;
     }
 
     if (compactBtn) {
@@ -5991,7 +6010,6 @@ function getText(key, params) {
       Utils.createScrollToAdjust(cooldownSlider, updateCooldown, 1, state.maxCharges, 1);
     }
 
-    loadBotSettings();
     // Ensure notification poller reflects current settings
     NotificationManager.syncFromState();
   }
@@ -7126,17 +7144,6 @@ function getText(key, params) {
 
       const coordinateSnakeToggle = document.getElementById('coordinateSnakeToggle');
       if (coordinateSnakeToggle) coordinateSnakeToggle.checked = state.coordinateSnake;
-
-      const settingsContainer = document.getElementById('wplace-settings-container');
-      const directionControls = settingsContainer.querySelector('#directionControls');
-      const snakeControls = settingsContainer.querySelector('#snakeControls');
-      const blockControls = settingsContainer.querySelector('#blockControls');
-      Utils.updateCoordinateUI({
-        mode: state.coordinateMode,
-        directionControls,
-        snakeControls,
-        blockControls,
-      });
 
       const paintUnavailablePixelsToggle = document.getElementById('paintUnavailablePixelsToggle');
       if (paintUnavailablePixelsToggle) {
