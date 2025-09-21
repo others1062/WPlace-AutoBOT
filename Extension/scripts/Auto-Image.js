@@ -1051,6 +1051,21 @@ function getText(key, params) {
       }
     },
 
+    hideAlert: () => {
+      // Remove existing alerts immediately with safety checks
+      const alerts = document.querySelectorAll('.wplace-alert-base');
+      alerts.forEach(alert => {
+        try {
+          if (alert && alert.parentNode) {
+            alert.parentNode.removeChild(alert);
+          }
+        } catch (error) {
+          // Ignore removeChild errors if element was already removed
+          console.debug('Alert already removed:', error);
+        }
+      });
+    },
+
     // Color utilities
     colorDistance: (a, b) => window.globalUtilsManager ? window.globalUtilsManager.colorDistance(a, b) : Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2) + Math.pow(a[2] - b[2], 2)),
     findClosestPaletteColor: (r, g, b, palette) => window.globalUtilsManager ? window.globalUtilsManager.findClosestPaletteColor(r, g, b, palette) : [r, g, b],
@@ -2095,6 +2110,10 @@ function getText(key, params) {
                 <i class="fas fa-expand"></i>
                 <span>${Utils.t('resizeImage')}</span>
               </button>
+              <button id="moveArtworkBtn" class="wplace-btn wplace-btn-primary" disabled>
+                <i class="fas fa-arrows-alt"></i>
+                <span>Move Artwork</span>
+              </button>
             </div>
             <div class="wplace-row single">
               <button id="selectPosBtn" class="wplace-btn wplace-btn-select" disabled>
@@ -2899,6 +2918,20 @@ function getText(key, params) {
       }>Perceptual (Lab)</option>
             <option value="legacy" ${state.colorMatchingAlgorithm === 'legacy' ? 'selected' : ''
       }>Legacy (RGB)</option>
+            <option value="hsv" ${state.colorMatchingAlgorithm === 'hsv' ? 'selected' : ''
+      }>HSV (Hue-Saturation-Value)</option>
+            <option value="hsl" ${state.colorMatchingAlgorithm === 'hsl' ? 'selected' : ''
+      }>HSL (Hue-Saturation-Lightness)</option>
+            <option value="xyz" ${state.colorMatchingAlgorithm === 'xyz' ? 'selected' : ''
+      }>XYZ (CIE Color Space)</option>
+            <option value="luv" ${state.colorMatchingAlgorithm === 'luv' ? 'selected' : ''
+      }>LUV (CIE L*u*v*)</option>
+            <option value="yuv" ${state.colorMatchingAlgorithm === 'yuv' ? 'selected' : ''
+      }>YUV (Luma-Chroma)</option>
+            <option value="oklab" ${state.colorMatchingAlgorithm === 'oklab' ? 'selected' : ''
+      }>Oklab (Perceptual Uniform)</option>
+            <option value="lch" ${state.colorMatchingAlgorithm === 'lch' ? 'selected' : ''
+      }>LCH (Lightness-Chroma-Hue)</option>
             </select>
           </label>
           <label class="resize-advanced-toggle">
@@ -4157,6 +4190,110 @@ function getText(key, params) {
 
     updateDataButtons();
 
+    function showMoveArtworkPanel() {
+      // Create move artwork control panel like status panels
+      const movePanel = document.createElement('div');
+      movePanel.id = 'moveArtworkPanel';
+      movePanel.className = 'wplace-move-panel';
+      
+      movePanel.innerHTML = `
+        <div class="wplace-header">
+          <div class="wplace-header-title">
+            <i class="fas fa-arrows-alt"></i>
+            Move Artwork
+          </div>
+          <div class="wplace-header-controls">
+            <button id="closeMovePanel" class="wplace-header-btn" title="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+        <div class="wplace-move-controls">
+          <div></div>
+          <button id="moveUp" class="wplace-move-btn" data-direction="up">▲</button>
+          <div></div>
+          <button id="moveLeft" class="wplace-move-btn" data-direction="left">◄</button>
+          <div class="wplace-move-center">1px</div>
+          <button id="moveRight" class="wplace-move-btn" data-direction="right">►</button>
+          <div></div>
+          <button id="moveDown" class="wplace-move-btn" data-direction="down">▼</button>
+          <div></div>
+        </div>
+      `;
+      
+      // No overlay - append directly to body like other panels
+      document.body.appendChild(movePanel);
+      
+      // Make the panel draggable
+      makeDraggable(movePanel);
+      
+      // Add event listeners for movement
+      let currentMessageTimeout = null;
+      
+      function moveArtwork(deltaX, deltaY) {
+        if (state.startPosition && state.region) {
+          const newX = state.startPosition.x + deltaX;
+          const newY = state.startPosition.y + deltaY;
+          
+          console.log(`🔄 Moving artwork from (${state.startPosition.x}, ${state.startPosition.y}) to (${newX}, ${newY})`);
+          
+          state.startPosition.x = newX;
+          state.startPosition.y = newY;
+          
+          // Clear any existing message timeout and alerts immediately
+          if (currentMessageTimeout) {
+            clearTimeout(currentMessageTimeout);
+            currentMessageTimeout = null;
+          }
+          Utils.hideAlert(); // Hide current alert immediately
+          
+          // Update overlay position if available
+          if (overlayManager) {
+            overlayManager.setPosition(state.startPosition, state.region)
+              .then(() => {
+                console.log('✅ Overlay position updated');
+                Utils.showAlert(`Moved to position (${newX}, ${newY})`, 'success');
+                // Set new timeout for this message
+                currentMessageTimeout = setTimeout(() => {
+                  Utils.hideAlert();
+                  currentMessageTimeout = null;
+                }, 1500); // Message disappears after 1.5 seconds
+              })
+              .catch(err => {
+                console.error('❌ Failed to update overlay:', err);
+                Utils.showAlert('Failed to update overlay position', 'error');
+              });
+          } else {
+            Utils.showAlert(`Position updated to (${newX}, ${newY})`, 'success');
+            // Set new timeout for this message
+            currentMessageTimeout = setTimeout(() => {
+              Utils.hideAlert();
+              currentMessageTimeout = null;
+            }, 1500);
+          }
+        } else {
+          Utils.showAlert('Please select a position first before moving artwork', 'warning');
+        }
+      }
+      
+      document.getElementById('moveUp').addEventListener('click', () => moveArtwork(0, -1));
+      document.getElementById('moveDown').addEventListener('click', () => moveArtwork(0, 1));
+      document.getElementById('moveLeft').addEventListener('click', () => moveArtwork(-1, 0));
+      document.getElementById('moveRight').addEventListener('click', () => moveArtwork(1, 0));
+      
+      // Close panel
+      function closeMovePanel() {
+        if (currentMessageTimeout) {
+          clearTimeout(currentMessageTimeout);
+          currentMessageTimeout = null;
+        }
+        Utils.hideAlert();
+        document.body.removeChild(movePanel);
+      }
+      
+      document.getElementById('closeMovePanel').addEventListener('click', closeMovePanel);
+    }
+
     function showResizeDialog(processor) {
       let baseProcessor = processor;
       let width, height;
@@ -5325,7 +5462,8 @@ function getText(key, params) {
           state.totalPixels = totalValidPixels;
           state.paintedPixels = 0;
           state.imageLoaded = true;
-          state.lastPosition = { x: 0, y: 0 };
+          // Keep existing lastPosition to continue from where we left off
+          // state.lastPosition = { x: 0, y: 0 }; // REMOVED: Don't reset position
 
           // Initialize painted map for tracking
           Utils.initializePaintedMap(width, height);
@@ -5432,6 +5570,46 @@ function getText(key, params) {
             state.region = null;
             state.selectingPosition = true;
             
+            // For extracted files, force enable all necessary flags for full functionality
+            state.colorsChecked = true;
+            state.imageLoaded = true;
+            
+            // Ensure image processor is available for extracted files
+            if (state.imageData && !state.imageData.processor) {
+              try {
+                // Create a temporary canvas to generate a data URL for the processor
+                const canvas = document.createElement('canvas');
+                canvas.width = state.imageData.width;
+                canvas.height = state.imageData.height;
+                const ctx = canvas.getContext('2d');
+                
+                // Create image data from pixels
+                const imageData = new ImageData(
+                  new Uint8ClampedArray(state.imageData.pixels),
+                  state.imageData.width,
+                  state.imageData.height
+                );
+                ctx.putImageData(imageData, 0, 0);
+                
+                // Create processor with canvas data URL using the correct class
+                const dataUrl = canvas.toDataURL();
+                state.imageData.processor = new window.WPlaceImageProcessor(dataUrl);
+                
+                // CRITICAL: Load the processor before using it
+                await state.imageData.processor.load();
+                console.log('🔧 Created and loaded WPlaceImageProcessor for extracted artwork');
+              } catch (error) {
+                console.error('❌ Failed to create image processor for extracted artwork:', error);
+                // Fallback: use global processor if available
+                if (window.globalImageProcessor) {
+                  console.log('🔄 Using global image processor as fallback');
+                  state.imageData.processor = window.globalImageProcessor;
+                }
+              }
+            }
+            
+            console.log('🎨 Force-enabled all flags for extracted JSON to access resize panel');
+            
             // For extracted images, ensure overlay is enabled but don't set position yet
             try {
               if (overlayManager && state.imageData) {
@@ -5457,14 +5635,20 @@ function getText(key, params) {
             // For extracted images, don't try to set overlay position until user selects one
             // The overlay should already be enabled from the restoreProgress function
             
-            // Update UI to show position selection needed
-            Utils.showAlert('Extracted artwork loaded! Click on the canvas to select where to place it.', 'success');
+            // Update UI with custom message for extracted artwork
+            Utils.showAlert('🎨 Extracted artwork loaded! Please click on the canvas to select where to place it.', 'info');
             updateUI('ready', 'default'); // Use 'ready' instead of 'waitingPosition' to avoid translation issues
             
             // Enable relevant buttons
             selectPosBtn.disabled = false;
-            if (state.colorsChecked) {
-              resizeBtn.disabled = false;
+            // Always enable resize button for extracted files since they have image processor
+            resizeBtn.disabled = false;
+            console.log('🔧 Resize button enabled for extracted artwork');
+            
+            // Enable move artwork button (will be fully enabled after position is set)
+            const moveArtworkBtn = document.getElementById('moveArtworkBtn');
+            if (moveArtworkBtn) {
+              moveArtworkBtn.disabled = false;
             }
             
             // Set up position selection like the regular selectPosBtn
@@ -5516,6 +5700,13 @@ function getText(key, params) {
 
                   startBtn.disabled = false;
                   selectPosBtn.textContent = Utils.t('selectPosition');
+                  
+                  // Enable Move Artwork button when position is set
+                  const moveArtworkBtn = document.getElementById('moveArtworkBtn');
+                  if (moveArtworkBtn) {
+                    moveArtworkBtn.disabled = false;
+                  }
+                  
                   updateUI('ready', 'success');
                   Utils.showAlert('Position selected! Ready to start painting.', 'success');
                 }
@@ -5540,10 +5731,34 @@ function getText(key, params) {
 
     if (resizeBtn) {
       resizeBtn.addEventListener('click', () => {
-        if (state.imageLoaded && state.imageData.processor && state.colorsChecked) {
+        console.log('🔍 [DEBUG] Resize button clicked. State check:', {
+          imageLoaded: state.imageLoaded,
+          hasProcessor: !!(state.imageData && state.imageData.processor),
+          colorsChecked: state.colorsChecked,
+          hasAvailableColors: !!(state.availableColors && state.availableColors.length > 0)
+        });
+        
+        if (state.imageLoaded && state.imageData && state.imageData.processor) {
           showResizeDialog(state.imageData.processor);
-        } else if (!state.colorsChecked) {
-          Utils.showAlert(Utils.t('uploadImageFirstColors'), 'warning');
+        } else {
+          let message = 'Please upload an image and check colors first.';
+          if (!state.imageLoaded) message = 'Please upload an image first.';
+          else if (!state.imageData || !state.imageData.processor) message = 'Image processor not available. Please reload the image.';
+          Utils.showAlert(message, 'warning');
+        }
+      });
+    }
+
+    // Move Artwork button event listener
+    const moveArtworkBtn = document.getElementById('moveArtworkBtn');
+    if (moveArtworkBtn) {
+      moveArtworkBtn.addEventListener('click', () => {
+        if (state.imageLoaded && (state.startPosition || state.selectingPosition)) {
+          showMoveArtworkPanel();
+        } else if (!state.imageLoaded) {
+          Utils.showAlert('Please upload or load an image first', 'warning');
+        } else {
+          Utils.showAlert('Please select a position for the artwork first', 'warning');
         }
       });
     }
@@ -5556,6 +5771,12 @@ function getText(key, params) {
         state.startPosition = null;
         state.region = null;
         startBtn.disabled = true;
+        
+        // Disable Move Artwork button when selecting new position
+        const moveArtworkBtn = document.getElementById('moveArtworkBtn');
+        if (moveArtworkBtn) {
+          moveArtworkBtn.disabled = true;
+        }
 
         Utils.showAlert(Utils.t('selectPositionAlert'), 'info');
         updateUI('waitingPosition', 'default');
@@ -5586,7 +5807,8 @@ function getText(key, params) {
                     x: payload.coords[0],
                     y: payload.coords[1],
                   };
-                  state.lastPosition = { x: 0, y: 0 };
+                  // Keep existing lastPosition to continue from where we left off
+                  // state.lastPosition = { x: 0, y: 0 }; // REMOVED: Don't reset position
 
                   // Update overlay position with validation
                   try {
@@ -5602,6 +5824,12 @@ function getText(key, params) {
 
                   if (state.imageLoaded) {
                     startBtn.disabled = false;
+                    
+                    // Enable Move Artwork button when position is set
+                    const moveArtworkBtn = document.getElementById('moveArtworkBtn');
+                    if (moveArtworkBtn) {
+                      moveArtworkBtn.disabled = false;
+                    }
                   }
 
                   window.fetch = originalFetch;
@@ -6296,7 +6524,12 @@ function getText(key, params) {
           }
 
           // Only include pixels that haven't been marked as painted yet
-          if (!Utils.isPixelPainted(x, y)) {
+          let absX = startX + x;
+          let absY = startY + y;
+          let adderX = Math.floor(absX / 1000);
+          let adderY = Math.floor(absY / 1000);
+          
+          if (!Utils.isPixelPainted(x, y, regionX + adderX, regionY + adderY)) {
             eligibleCoords.push([x, y, targetPixelInfo]);
           }
         }
@@ -6422,7 +6655,7 @@ function getText(key, params) {
 
     // Check initial charges to calculate wait time
     let chargeCheckCount = 0;
-    const maxChargeChecks = 10; // Limit API calls during cooldown
+    // const maxChargeChecks = 10; // REMOVED: No limit on API calls during cooldown
 
     while (!state.stopFlag) {
       chargeCheckCount++;
@@ -6469,11 +6702,11 @@ function getText(key, params) {
       console.log(`⏱️ Cooldown check ${chargeCheckCount}: ${state.displayCharges}/${state.cooldownChargeThreshold} charges, waiting 10s before next check`);
       await Utils.sleep(10000);
 
-      // Fail-safe: Don't exceed max checks
-      if (chargeCheckCount >= maxChargeChecks) {
-        console.warn('⚠️ Max charge checks reached during cooldown, continuing anyway');
-        break;
-      }
+      // REMOVED: No limit on charge checks - bot will wait infinitely until charges are available
+      // if (chargeCheckCount >= maxChargeChecks) {
+      //   console.warn('⚠️ Max charge checks reached during cooldown, continuing anyway');
+      //   break;
+      // }
     }
 
     return 'stopped';
@@ -6514,7 +6747,7 @@ function getText(key, params) {
       Utils.saveProgress();
     } else {
       updateUI('paintingComplete', 'success', { count: state.paintedPixels });
-      state.lastPosition = { x: 0, y: 0 };
+      state.lastPosition = { x: 0, y: 0 }; // Only reset when truly complete
       Utils.saveProgress(); // Save final complete state
       overlayManager.clear();
       const toggleOverlayBtn = document.getElementById('toggleOverlayBtn');
