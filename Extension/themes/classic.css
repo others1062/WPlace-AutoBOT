@@ -921,3 +921,108 @@
   color: #00bfff;
 }
 
+/* Move Artwork Panel Styles for Classic Theme */
+:root .wplace-move-panel,
+.wplace-theme-classic .wplace-move-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--wplace-primary);
+  border: 2px solid rgb(255 255 255 / 20%);
+  border-radius: var(--wplace-radius);
+  padding: 20px;
+  z-index: 10000;
+  box-shadow: var(--wplace-shadow);
+  min-width: 200px;
+  text-align: center;
+  backdrop-filter: var(--wplace-backdrop);
+  font-family: var(--wplace-font);
+}
+
+:root .wplace-move-panel-title,
+.wplace-theme-classic .wplace-move-panel-title {
+  color: var(--wplace-text);
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 50%);
+}
+
+:root .wplace-move-controls,
+.wplace-theme-classic .wplace-move-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+:root .wplace-move-btn,
+.wplace-theme-classic .wplace-move-btn {
+  padding: 10px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: var(--wplace-btn-radius);
+  cursor: pointer;
+  font-family: var(--wplace-font);
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 20%);
+}
+
+:root .wplace-move-btn:hover,
+.wplace-theme-classic .wplace-move-btn:hover {
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 30%);
+}
+
+:root .wplace-move-btn:active,
+.wplace-theme-classic .wplace-move-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 20%);
+}
+
+:root .wplace-move-center,
+.wplace-theme-classic .wplace-move-center {
+  color: var(--wplace-highlight);
+  padding: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:root .wplace-move-close-btn,
+.wplace-theme-classic .wplace-move-close-btn {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  color: white;
+  border: 1px solid rgb(255 255 255 / 20%);
+  padding: 10px 16px;
+  border-radius: var(--wplace-btn-radius);
+  cursor: pointer;
+  font-family: var(--wplace-font);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 20%);
+}
+
+:root .wplace-move-close-btn:hover,
+.wplace-theme-classic .wplace-move-close-btn:hover {
+  background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 30%);
+}
+
+:root .wplace-move-overlay,
+.wplace-theme-classic .wplace-move-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+
