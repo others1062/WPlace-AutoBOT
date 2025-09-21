@@ -4,11 +4,11 @@
 
 .wplace-theme-classic-teal {
   /* === CORE COLORS === */
-  --wplace-primary: #2BCAB0;           /* Quite white */
-  --wplace-secondary: #41726D;         /* Light white */
-  --wplace-accent: #046A79;            /* Darker white */
-  --wplace-text: #0B483C;              /* Dark blue text */
-  --wplace-highlight: #0B483C;         /* Dark blue highlight */
+  --wplace-primary: #2BCAB0;           /* Quite green or teal */
+  --wplace-secondary: #41726D;         /* Lighter Green */
+  --wplace-accent: #046A79;            /* Darker Teal */
+  --wplace-text: #0B483C;              /* Dark Teal text */
+  --wplace-highlight: #0B483C;         /* Dark teal highlight */
   --wplace-success: #28a745;           /* Bootstrap green */
   --wplace-error: #dc3545;             /* Bootstrap red */
   --wplace-warning: #ffc107;           /* Bootstrap yellow */
@@ -773,6 +773,101 @@
 
 .wplace-theme-classic-teal .wplace-account-stats .fas.fa-tint {
     color: #2196f3;
+}
+
+/* Move Artwork Panel Styles for Classic Teal Theme */
+.wplace-theme-classic-teal .wplace-move-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--wplace-primary);
+  border: 2px solid var(--wplace-border-color);
+  border-radius: var(--wplace-radius);
+  padding: 20px;
+  z-index: 10000;
+  box-shadow: var(--wplace-shadow);
+  min-width: 200px;
+  text-align: center;
+  backdrop-filter: var(--wplace-backdrop);
+  font-family: var(--wplace-font);
+}
+
+.wplace-theme-classic-teal .wplace-move-panel-title {
+  color: var(--wplace-text);
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wplace-theme-classic-teal .wplace-move-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.wplace-theme-classic-teal .wplace-move-btn {
+  padding: 10px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: 1px solid var(--wplace-border-color);
+  border-radius: var(--wplace-btn-radius);
+  cursor: pointer;
+  font-family: var(--wplace-font);
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
+}
+
+.wplace-theme-classic-teal .wplace-move-btn:hover {
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 15%);
+}
+
+.wplace-theme-classic-teal .wplace-move-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
+}
+
+.wplace-theme-classic-teal .wplace-move-center {
+  color: var(--wplace-highlight);
+  padding: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wplace-theme-classic-teal .wplace-move-close-btn {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  color: white;
+  border: 1px solid var(--wplace-border-color);
+  padding: 10px 16px;
+  border-radius: var(--wplace-btn-radius);
+  cursor: pointer;
+  font-family: var(--wplace-font);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
+}
+
+.wplace-theme-classic-teal .wplace-move-close-btn:hover {
+  background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 15%);
+}
+
+.wplace-theme-classic-teal .wplace-move-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  backdrop-filter: blur(4px);
 }
 
 
