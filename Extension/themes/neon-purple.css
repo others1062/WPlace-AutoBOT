@@ -701,3 +701,115 @@
     color: #F8A9FD;
     text-shadow: 0 0 8px #00ffff;
 }
+
+/* Move Artwork Panel Styles for Neon Purple Theme */
+.wplace-theme-neon-purple .wplace-move-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--wplace-primary) !important;
+  border: 2px solid var(--wplace-text) !important;
+  border-radius: 0 !important;
+  padding: 20px;
+  z-index: 10000;
+  box-shadow: 0 0 20px var(--wplace-text), inset 0 0 20px rgba(129, 220, 247, 0.1) !important;
+  min-width: 200px;
+  text-align: center;
+  font-family: var(--wplace-font) !important;
+  color: var(--wplace-text) !important;
+}
+
+.wplace-theme-neon-purple .wplace-move-panel-title {
+  color: var(--wplace-text) !important;
+  margin: 0 0 15px 0;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px var(--wplace-text) !important;
+  font-family: var(--wplace-font) !important;
+  animation: cyan-pulse 2s infinite;
+}
+
+.wplace-theme-neon-purple .wplace-move-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 15px;
+}
+
+.wplace-theme-neon-purple .wplace-move-btn {
+  padding: 8px !important;
+  background: var(--wplace-secondary) !important;
+  color: var(--wplace-text) !important;
+  border: 1px solid var(--wplace-text) !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  font-family: var(--wplace-font) !important;
+  font-size: 10px !important;
+  text-shadow: 0 0 5px var(--wplace-text) !important;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.wplace-theme-neon-purple .wplace-move-btn:hover {
+  background: var(--wplace-accent) !important;
+  box-shadow: 0 0 15px var(--wplace-text) !important;
+  animation: cyan-flicker 0.5s infinite;
+}
+
+.wplace-theme-neon-purple .wplace-move-center {
+  color: var(--wplace-highlight) !important;
+  padding: 8px;
+  font-size: 9px !important;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 0 5px var(--wplace-highlight) !important;
+  text-transform: uppercase;
+  font-family: var(--wplace-font) !important;
+}
+
+.wplace-theme-neon-purple .wplace-move-close-btn {
+  background: var(--wplace-error) !important;
+  color: white !important;
+  border: 1px solid var(--wplace-error) !important;
+  padding: 8px 12px;
+  border-radius: 0 !important;
+  cursor: pointer;
+  font-family: var(--wplace-font) !important;
+  font-size: 9px !important;
+  text-transform: uppercase;
+  text-shadow: 0 0 5px white !important;
+  transition: all 0.2s ease;
+}
+
+.wplace-theme-neon-purple .wplace-move-close-btn:hover {
+  box-shadow: 0 0 15px var(--wplace-error) !important;
+  animation: error-pulse 0.5s infinite;
+}
+
+.wplace-theme-neon-purple .wplace-move-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(45, 0, 84, 0.9) !important;
+  z-index: 9999;
+}
+
+@keyframes purple-pulse {
+  0%, 100% { text-shadow: 0 0 5px var(--wplace-text), 0 0 10px var(--wplace-text); }
+  50% { text-shadow: 0 0 10px var(--wplace-text), 0 0 20px var(--wplace-text); }
+}
+
+@keyframes purple-flicker {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.8; }
+}
+
+@keyframes error-pulse {
+  0%, 100% { box-shadow: 0 0 5px var(--wplace-error); }
+  50% { box-shadow: 0 0 15px var(--wplace-error); }
+}
