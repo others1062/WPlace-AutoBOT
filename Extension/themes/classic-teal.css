@@ -6,9 +6,9 @@
   /* === CORE COLORS === */
   --wplace-primary: #2BCAB0;           /* Quite white */
   --wplace-secondary: #41726D;         /* Light white */
-  --wplace-accent: #F3F3F3;            /* Darker white */
-  --wplace-text: #203C5D;              /* Dark blue text */
-  --wplace-highlight: #203C5D;         /* Dark blue highlight */
+  --wplace-accent: #046A79;            /* Darker white */
+  --wplace-text: #0B483C;              /* Dark blue text */
+  --wplace-highlight: #0B483C;         /* Dark blue highlight */
   --wplace-success: #28a745;           /* Bootstrap green */
   --wplace-error: #dc3545;             /* Bootstrap red */
   --wplace-warning: #ffc107;           /* Bootstrap yellow */
@@ -34,7 +34,7 @@
   --wplace-danger: #dc3545;            /* Bootstrap red */
   --wplace-danger-dark: #c82333;       /* Darker red */
   --wplace-muted-text: rgb(33 37 41 / 70%);
-  --wplace-highlight-secondary: #203C5D;
+  --wplace-highlight-secondary: #0B483C;
   
   /* Text variants */
   --wplace-text-secondary: rgb(33 37 41 / 90%);
@@ -67,7 +67,7 @@
   --wplace-pulse-end: rgb(40 167 69 / 0%);
   
   /* Slider colors */
-  --wplace-slider-thumb-bg: #203C5D;
+  --wplace-slider-thumb-bg: #0B483C;
   --wplace-slider-track-bg: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
 }
 
@@ -107,7 +107,7 @@
 
 /* Stats container with proper contrast */
 .wplace-theme-classic-teal #wplace-stats-container {
-  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #046A79 100%) !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
   border-radius: 12px !important;
   box-shadow: 0 8px 32px rgb(0 0 0 / 15%) !important;
@@ -120,7 +120,7 @@
 
 /* Headers with light gradient */
 .wplace-theme-classic-teal .wplace-header {
-  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #046A79 100%) !important;
   color: var(--wplace-highlight) !important;
   border-bottom: 1px solid rgb(0 0 0 / 15%) !important;
   text-shadow: none !important;
@@ -128,7 +128,7 @@
 
 /* Stats header styling */
 .wplace-theme-classic-teal #wplace-stats-container .wplace-header {
-  background: linear-gradient(135deg, #F3F3F3 0%, #2BCAB0 100%) !important;
+  background: linear-gradient(135deg, #046A79 0%, #2BCAB0 100%) !important;
   color: var(--wplace-text) !important;
   border-bottom: 1px solid rgb(0 0 0 / 20%) !important;
   text-shadow: none !important;
@@ -154,7 +154,7 @@
 
 /* Buttons with light styling */
 .wplace-theme-classic-teal .wplace-btn {
-  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #046A79 100%) !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
   border-radius: 12px !important;
   color: var(--wplace-text) !important;
@@ -165,20 +165,20 @@
 
 /* Data management section buttons */
 .wplace-theme-classic-teal .wplace-data-management .wplace-btn {
-  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #046A79 100%) !important;
   border: 1px solid rgb(0 0 0 / 20%) !important;
-  color: #203C5D !important;
+  color: #0B483C !important;
   font-weight: 500 !important;
 }
 
 .wplace-theme-classic-teal .wplace-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #F3F3F3 0%, #2BCAB0 100%) !important;
+  background: linear-gradient(135deg, #046A79 0%, #2BCAB0 100%) !important;
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%) !important;
   transform: translateY(-1px) !important;
 }
 
 .wplace-theme-classic-teal .wplace-data-management .wplace-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #F3F3F3 0%, #2BCAB0 100%) !important;
+  background: linear-gradient(135deg, #046A79 0%, #2BCAB0 100%) !important;
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%) !important;
 }
 
@@ -237,7 +237,7 @@
 
 /* Settings header */
 .wplace-theme-classic-teal .wplace-settings-header {
-  background: linear-gradient(135deg, #41726D 0%, #F3F3F3 100%) !important;
+  background: linear-gradient(135deg, #41726D 0%, #046A79 100%) !important;
   border-bottom: 1px solid rgb(0 0 0 / 15%) !important;
 }
 
@@ -307,7 +307,7 @@
 }
 
 .wplace-theme-classic-teal .wplace-progress-bar {
-  background: linear-gradient(135deg, #203C5D 0%, #203C5D 100%) !important;
+  background: linear-gradient(135deg, #0B483C 0%, #0B483C 100%) !important;
   box-shadow: none !important;
 }
 
@@ -449,7 +449,7 @@
 .wplace-theme-classic-teal .wplace-icon-palette { color:  #003BFF; }
 .wplace-theme-classic-teal .wplace-icon-globe { color: #ffeaa7; }
 .wplace-theme-classic-teal .wplace-icon-paint { color: #4facfe; }
-.wplace-theme-classic-teal .wplace-icon-eye { color: #203C5D; }
+.wplace-theme-classic-teal .wplace-icon-eye { color: #0B483C; }
 
 /* Clean teal theme animations */
 @keyframes light-shimmer {
