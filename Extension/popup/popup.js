@@ -39,6 +39,7 @@ const AVAILABLE_SCRIPTS = [
 let statusDot, statusText, scriptsList, accountsContainer, accountPlaceholder;
 let addAccountModal, accountNameInput, accountTokenInput;
 let refreshAccountBtn, addAccountBtn, saveAccountBtn, cancelAccountBtn, closeModalBtn;
+let exportAccountsBtn, importAccountsBtn;
 
 // Global state
 let accounts = [];
@@ -75,6 +76,8 @@ function initializeElements() {
     saveAccountBtn = document.getElementById('saveAccountBtn');
     cancelAccountBtn = document.getElementById('cancelAccountBtn');
     closeModalBtn = document.getElementById('closeModalBtn');
+    exportAccountsBtn = document.getElementById('exportAccountsBtn');
+    importAccountsBtn = document.getElementById('importAccountsBtn');
 }
 
 async function loadScripts() {
@@ -126,6 +129,8 @@ function setupEventListeners() {
     saveAccountBtn.addEventListener('click', handleSaveAccount);
     cancelAccountBtn.addEventListener('click', closeAddAccountModal);
     closeModalBtn.addEventListener('click', closeAddAccountModal);
+    exportAccountsBtn.addEventListener('click', handleExportAccounts);
+    importAccountsBtn.addEventListener('click', handleImportAccounts);
 
     // Modal close on overlay click
     addAccountModal.addEventListener('click', (e) => {
@@ -660,6 +665,194 @@ async function loadStartupScript() {
     const select = document.getElementById('startupScriptSelect');
     if (select) {
         select.value = result.startupScript || '';
+    }
+}
+
+async function handleExportAccounts() {
+    try {
+        if (isLoading) return;
+        
+        setLoading(true);
+        showNotification('Exporting accounts...', 'info');
+        
+        console.log('📤 Starting account export process');
+        
+        // Get accounts from storage
+        const result = await chrome.storage.local.get('infoAccounts');
+        const accounts = result.infoAccounts || [];
+        
+        if (accounts.length === 0) {
+            showNotification('No accounts to export', 'warning');
+            return;
+        }
+        
+        // Create export data structure
+        const exportData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            accountCount: accounts.length,
+            accounts: accounts.map(account => ({
+                name: account.name,
+                token: account.token,
+                ID: account.ID,
+                // Include static metadata only (exclude dynamic status like Charges, Max, Droplets)
+                ...(account.lastActive && { lastActive: account.lastActive }),
+                ...(account.level && { level: account.level }),
+                ...(account.totalPixelsPainted && { totalPixelsPainted: account.totalPixelsPainted }),
+                ...(account.allianceName && { allianceName: account.allianceName }),
+                ...(account.allianceRole && { allianceRole: account.allianceRole })
+            }))
+        };
+        
+        // Create filename with timestamp
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `wplace-accounts-${timestamp}.json`;
+        
+        // Create and download file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log(`✅ Exported ${accounts.length} accounts to ${filename}`);
+        showNotification(`Exported ${accounts.length} accounts successfully`, 'success');
+        
+    } catch (error) {
+        console.error('❌ Error exporting accounts:', error);
+        showNotification('Failed to export accounts', 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function handleImportAccounts() {
+    try {
+        if (isLoading) return;
+        
+        setLoading(true);
+        showNotification('Importing accounts...', 'info');
+        
+        console.log('📥 Starting account import process');
+        
+        // Create file input
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                setLoading(false);
+                return;
+            }
+            
+            try {
+                const text = await file.text();
+                const importData = JSON.parse(text);
+                
+                // Validate import data structure
+                if (!importData.accounts || !Array.isArray(importData.accounts)) {
+                    throw new Error('Invalid file format: missing accounts array');
+                }
+                
+                // Validate each account has required fields
+                for (const account of importData.accounts) {
+                    if (!account.name || !account.token) {
+                        throw new Error('Invalid account data: missing name or token');
+                    }
+                }
+                
+                // Get existing accounts
+                const result = await chrome.storage.local.get('infoAccounts');
+                let existingAccounts = result.infoAccounts || [];
+                
+                let addedCount = 0;
+                let updatedCount = 0;
+                let skippedCount = 0;
+                
+                // Process each imported account
+                for (const importAccount of importData.accounts) {
+                    // Check if account already exists (by token or ID)
+                    const existingIndex = existingAccounts.findIndex(existing => 
+                        existing.token === importAccount.token || 
+                        (existing.ID && importAccount.ID && existing.ID === importAccount.ID)
+                    );
+                    
+                    if (existingIndex > -1) {
+                        // Account exists - ask user what to do
+                        const shouldUpdate = confirm(
+                            `Account "${importAccount.name}" already exists. Update it?\n\n` +
+                            `Click OK to update, Cancel to skip.`
+                        );
+                        
+                        if (shouldUpdate) {
+                            // Update existing account
+                            existingAccounts[existingIndex] = {
+                                ...existingAccounts[existingIndex],
+                                ...importAccount,
+                                lastImported: new Date().toISOString()
+                            };
+                            updatedCount++;
+                            console.log(`🔄 Updated account: ${importAccount.name}`);
+                        } else {
+                            skippedCount++;
+                            console.log(`⏭️ Skipped account: ${importAccount.name}`);
+                        }
+                    } else {
+                        // New account - add it
+                        existingAccounts.push({
+                            ...importAccount,
+                            lastImported: new Date().toISOString(),
+                            // Set default values for missing fields
+                            Charges: importAccount.Charges || 0,
+                            Max: importAccount.Max || 100,
+                            Droplets: importAccount.Droplets || 0
+                        });
+                        addedCount++;
+                        console.log(`➕ Added new account: ${importAccount.name}`);
+                    }
+                }
+                
+                // Save updated accounts
+                await chrome.storage.local.set({ infoAccounts: existingAccounts });
+                
+                // Update the accounts array for compatibility
+                const accountTokens = existingAccounts.map(account => account.token);
+                await chrome.storage.local.set({ accounts: accountTokens });
+                
+                // Reload the accounts display
+                await loadAccounts();
+                
+                // Show summary
+                const summary = [
+                    `Import completed:`,
+                    addedCount > 0 ? `${addedCount} added` : '',
+                    updatedCount > 0 ? `${updatedCount} updated` : '',
+                    skippedCount > 0 ? `${skippedCount} skipped` : ''
+                ].filter(Boolean).join(', ');
+                
+                console.log(`✅ Import summary: ${summary}`);
+                showNotification(summary, 'success');
+                
+            } catch (error) {
+                console.error('❌ Error importing accounts:', error);
+                showNotification(`Import failed: ${error.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        input.click();
+        
+    } catch (error) {
+        console.error('❌ Error starting import:', error);
+        showNotification('Failed to start import', 'error');
+        setLoading(false);
     }
 }
 
