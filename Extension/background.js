@@ -110,7 +110,7 @@ async function executeLocalScript(scriptName, tabId) {
                     const overlayManagerCode = await overlayManagerResponse.text();
                     console.log('🎨 Overlay manager loaded, injecting third...');
                     
-                    // Execute overlay manager third
+                    // Execute overlay manager thirds
                     await chrome.scripting.executeScript({
                         target: { tabId: tabId },
                         world: "MAIN",

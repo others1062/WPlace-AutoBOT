@@ -39,8 +39,23 @@ class TokenManager {
     // Retry counter
     this.retryCount = 0;
     
+    // Widget pooling for faster token generation
+    this.widgetPool = [];
+    this.poolQueue = []; // Resolvers waiting for free widgets
+    this.poolSize = 2; // Default pool size
+    this.poolInitialized = false;
+    this.poolMetrics = {
+      tokensGenerated: 0,
+      avgCreationTime: 0,
+      poolHits: 0,
+      poolMisses: 0
+    };
+    
     // Initialize message listener for token capture
     this._initializeTokenCapture();
+    
+    // Initialize widget pool after a short delay to ensure DOM is ready
+    setTimeout(() => this.initPool(this.poolSize), 100);
   }
 
   /**
@@ -334,7 +349,7 @@ class TokenManager {
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
       script.async = true;
       script.defer = true;
-      script.onload = () => {
+      script.onload = async () => {
         this.turnstileLoaded = true;
         console.log('✅ Turnstile script loaded successfully');
         resolve();
@@ -410,6 +425,60 @@ class TokenManager {
    */
   async executeTurnstile(sitekey, action = 'paint') {
     await this.loadTurnstile();
+
+    // Initialize widget pool lazily on first use
+    if (!this.poolInitialized && window.turnstile && false) { // Temporarily disabled
+      try {
+        console.log('🏊 Initializing widget pool on first use...');
+        // Use the current sitekey if available, otherwise skip pool for this request
+        if (sitekey && sitekey.length > 10 && sitekey.startsWith('0x')) {
+          this._cachedSitekey = sitekey; // Cache the valid sitekey
+          await this.initPool();
+        } else {
+          console.warn('⚠️ Invalid sitekey, skipping pool initialization for now');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to initialize widget pool:', error.message);
+      }
+    }
+
+    // Skip widget pool for now (temporarily disabled)
+    // Try widget pool first for faster generation (only if we have a valid pool)
+    if (false && this.poolInitialized && this.widgetPool.length > 0 && sitekey && sitekey.length > 10) {
+      try {
+        console.log('🏊 Using widget pool for token generation...');
+        const poolStartTime = performance.now();
+        
+        const token = await this.withWidget(async (widget) => {
+          if (!widget) {
+            throw new Error('No widget available from pool');
+          }
+          
+          // Reset the widget for fresh token generation
+          if (window.turnstile?.reset) {
+            window.turnstile.reset(widget.widgetId);
+          }
+          
+          // Generate token using pooled widget with built-in timeout
+          const token = await widget.createNewTokenPromise();
+          
+          return token;
+        }, 12000); // Increased widget borrow timeout
+        
+        if (token && token.length > 20) {
+          const poolTime = performance.now() - poolStartTime;
+          console.log(`✅ Token generated via pool in ${poolTime.toFixed(2)}ms`);
+          return token;
+        }
+      } catch (error) {
+        console.log('⚠️ Widget pool failed, falling back to direct creation:', error.message);
+        // Don't try pool again for this sitekey if it's failing
+        if (error.message.includes('401') || error.message.includes('unauthorized')) {
+          console.log('🚫 Sitekey might be invalid, disabling pool for this session');
+          this.poolInitialized = false;
+        }
+      }
+    }
 
     // Try reusing existing widget first if sitekey matches
     if (this._turnstileWidgetId && this._lastSitekey === sitekey && window.turnstile?.execute) {
@@ -828,6 +897,328 @@ class TokenManager {
         ]
       )
       .join('');
+  }
+
+  // ============ WIDGET POOLING METHODS ============
+
+  /**
+   * Initialize widget pool for faster token generation
+   * @param {number} size - Pool size (default 2)
+   */
+  async initPool(size = 2) {
+    if (this.poolInitialized) return;
+    
+    console.log(`🏊 Initializing Turnstile widget pool with ${size} widgets...`);
+    const startTime = performance.now();
+    
+    try {
+      // Ensure Turnstile is loaded first
+      await this.loadTurnstile();
+      
+      // Use a fallback sitekey for pool initialization to avoid circular dependency
+      let sitekey = this._cachedSitekey || '0x4AAAAAABpqJe8FO0N84q0F';
+      
+      // Validate sitekey format
+      if (!sitekey || sitekey.length < 10 || !sitekey.startsWith('0x')) {
+        console.warn('⚠️ Invalid cached sitekey, using fallback');
+        sitekey = '0x4AAAAAABpqJe8FO0N84q0F';
+      }
+      
+      console.log('🔍 Using sitekey for pool initialization:', sitekey);
+      
+      // Create pool entries
+      const promises = [];
+      for (let i = 0; i < size; i++) {
+        promises.push(this._createWidgetEntry(sitekey, i));
+      }
+      
+      const results = await Promise.allSettled(promises);
+      
+      // Process results
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value) {
+          this.widgetPool.push(result.value);
+          console.log(`✅ Pool widget ${index} created successfully`);
+        } else {
+          console.warn(`❌ Pool widget ${index} failed:`, result.reason);
+        }
+      });
+      
+      const initTime = performance.now() - startTime;
+      this.poolMetrics.avgCreationTime = initTime / this.widgetPool.length;
+      this.poolInitialized = true;
+      
+      console.log(`🏊 Widget pool initialized: ${this.widgetPool.length}/${size} widgets ready (${initTime.toFixed(2)}ms)`);
+      
+    } catch (error) {
+      console.error('❌ Widget pool initialization failed:', error);
+      this.poolInitialized = false;
+    }
+  }
+
+  /**
+   * Create a single widget entry for the pool
+   * @param {string} sitekey - Turnstile sitekey
+   * @param {number} index - Widget index for identification
+   * @returns {Promise<Object>} Widget entry object
+   */
+  async _createWidgetEntry(sitekey, index = 0) {
+    const startTime = performance.now();
+    
+    try {
+      // Create hidden container
+      const container = document.createElement('div');
+      container.id = `turnstile-pool-widget-${index}-${this._randStr(8)}`;
+      container.style.cssText = `
+        position: fixed !important;
+        left: -9999px !important;
+        top: -9999px !important;
+        width: 300px !important;
+        height: 65px !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
+      `;
+      
+      document.body.appendChild(container);
+      
+      // Create widget
+      let widgetId = null;
+      let tokenPromise = null;
+      
+      const widgetPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Widget creation timeout'));
+        }, 10000);
+        
+        try {
+          widgetId = window.turnstile.render(container, {
+            sitekey: sitekey,
+            size: 'normal',
+            theme: 'light',
+            callback: (token) => {
+              clearTimeout(timeout);
+              if (tokenPromise) {
+                tokenPromise.resolve(token);
+              }
+            },
+            'error-callback': (error) => {
+              clearTimeout(timeout);
+              if (tokenPromise) {
+                tokenPromise.reject(new Error(`Turnstile error: ${error}`));
+              } else {
+                reject(new Error(`Turnstile error: ${error}`));
+              }
+            },
+            'expired-callback': () => {
+              console.log(`🔄 Pool widget ${index} token expired`);
+            }
+          });
+          
+          if (widgetId) {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            clearTimeout(timeout);
+            reject(new Error('Failed to create widget'));
+          }
+        } catch (error) {
+          clearTimeout(timeout);
+          reject(error);
+        }
+      });
+      
+      await widgetPromise;
+      
+      const entry = {
+        id: `pool-widget-${index}`,
+        index,
+        container,
+        widgetId,
+        sitekey,
+        state: 'idle', // 'idle' | 'in-use' | 'error' | 'initializing'
+        createdAt: Date.now(),
+        lastUsedAt: 0,
+        generationCount: 0,
+        createNewTokenPromise() {
+          tokenPromise = {};
+          tokenPromise.promise = new Promise((resolve, reject) => {
+            tokenPromise.resolve = resolve;
+            tokenPromise.reject = reject;
+          });
+          return tokenPromise.promise;
+        }
+      };
+      
+      const creationTime = performance.now() - startTime;
+      console.log(`✅ Pool widget ${index} created in ${creationTime.toFixed(2)}ms`);
+      
+      return entry;
+      
+    } catch (error) {
+      console.error(`❌ Failed to create pool widget ${index}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get an available widget from the pool
+   * @param {number} timeoutMs - Timeout in milliseconds
+   * @returns {Promise<Object>} Widget entry
+   */
+  async getWidget(timeoutMs = 5000) {
+    // Try to find an idle widget
+    const idleWidget = this.widgetPool.find(entry => entry.state === 'idle');
+    if (idleWidget) {
+      idleWidget.state = 'in-use';
+      idleWidget.lastUsedAt = Date.now();
+      this.poolMetrics.poolHits++;
+      return idleWidget;
+    }
+    
+    // No idle widget available, add to queue and wait
+    this.poolMetrics.poolMisses++;
+    
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        // Remove from queue
+        const index = this.poolQueue.findIndex(item => item.resolve === resolve);
+        if (index > -1) {
+          this.poolQueue.splice(index, 1);
+        }
+        reject(new Error('Widget pool timeout: no widget available'));
+      }, timeoutMs);
+      
+      this.poolQueue.push({
+        resolve: (widget) => {
+          clearTimeout(timeout);
+          resolve(widget);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        }
+      });
+    });
+  }
+
+  /**
+   * Release a widget back to the pool
+   * @param {Object} entry - Widget entry to release
+   */
+  releaseWidget(entry) {
+    if (!entry || entry.state !== 'in-use') {
+      console.warn('⚠️ Attempted to release widget that is not in use');
+      return;
+    }
+    
+    entry.state = 'idle';
+    entry.generationCount++;
+    
+    // Check if widget needs rotation (after many uses)
+    if (entry.generationCount > 50) {
+      console.log(`🔄 Rotating pool widget ${entry.index} after ${entry.generationCount} uses`);
+      this.destroyWidget(entry);
+      // Recreate widget in background
+      this._createWidgetEntry(entry.sitekey, entry.index).then(newEntry => {
+        if (newEntry) {
+          this.widgetPool.push(newEntry);
+        }
+      }).catch(error => {
+        console.error('Failed to recreate rotated widget:', error);
+      });
+      return;
+    }
+    
+    // Serve next waiting request if any
+    if (this.poolQueue.length > 0) {
+      const waiter = this.poolQueue.shift();
+      entry.state = 'in-use';
+      entry.lastUsedAt = Date.now();
+      waiter.resolve(entry);
+    }
+  }
+
+  /**
+   * Destroy a widget and remove from pool
+   * @param {Object} entry - Widget entry to destroy
+   */
+  destroyWidget(entry) {
+    if (!entry) return;
+    
+    try {
+      // Reset widget if possible
+      if (entry.widgetId && window.turnstile?.reset) {
+        window.turnstile.reset(entry.widgetId);
+      }
+      
+      // Remove container
+      if (entry.container && entry.container.parentNode) {
+        entry.container.parentNode.removeChild(entry.container);
+      }
+      
+      // Remove from pool
+      const index = this.widgetPool.findIndex(w => w.id === entry.id);
+      if (index > -1) {
+        this.widgetPool.splice(index, 1);
+      }
+      
+      console.log(`🗑️ Destroyed pool widget ${entry.index}`);
+      
+    } catch (error) {
+      console.error('Error destroying widget:', error);
+    }
+  }
+
+  /**
+   * Execute a function with a pooled widget (automatic borrow/return)
+   * @param {Function} fn - Async function that receives widget entry
+   * @param {number} timeoutMs - Widget acquisition timeout
+   * @returns {Promise} Result of the function
+   */
+  async withWidget(fn, timeoutMs = 5000) {
+    let widget = null;
+    
+    try {
+      // Fallback to direct creation if pool not ready
+      if (!this.poolInitialized || this.widgetPool.length === 0) {
+        console.log('📝 Pool not ready, falling back to direct widget creation');
+        return await fn(null); // Let the function handle direct creation
+      }
+      
+      widget = await this.getWidget(timeoutMs);
+      const result = await fn(widget);
+      
+      this.poolMetrics.tokensGenerated++;
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Error in withWidget:', error);
+      throw error;
+    } finally {
+      if (widget) {
+        this.releaseWidget(widget);
+      }
+    }
+  }
+
+  /**
+   * Get pool statistics
+   * @returns {Object} Pool metrics and status
+   */
+  getPoolStats() {
+    const idleCount = this.widgetPool.filter(w => w.state === 'idle').length;
+    const inUseCount = this.widgetPool.filter(w => w.state === 'in-use').length;
+    
+    return {
+      initialized: this.poolInitialized,
+      totalWidgets: this.widgetPool.length,
+      idleWidgets: idleCount,
+      inUseWidgets: inUseCount,
+      queueLength: this.poolQueue.length,
+      metrics: { ...this.poolMetrics },
+      hitRate: this.poolMetrics.poolHits / Math.max(1, this.poolMetrics.poolHits + this.poolMetrics.poolMisses)
+    };
   }
 }
 
