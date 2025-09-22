@@ -67,7 +67,7 @@ Follow the exact same steps listed for Chrome above, using Kiwi Browser instead.
 ✨┃Features
 - [x] Automatically farms droplets/levels
       
-- [X] Artwork Extractor
+- [X] Artwork Extractor(copy-paste artworks)
 
 - [X] Quick Art mover feature 
 
