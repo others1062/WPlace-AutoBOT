@@ -40,7 +40,7 @@ function getText(key, params) {
   window.WPLACE_ART_EXTRACTOR_LOADED = true;
 
   console.log('%c🎨 WPlace Art Extractor Starting...', 'color: #ff6b35; font-weight: bold; font-size: 16px;');
-  console.log('%c✨ Now featuring Auto-Guard style interactive pixel capture!', 'color: #26de81; font-weight: bold;');
+  console.log('%c✨ Interactive pixel capture for area extraction!', 'color: #26de81; font-weight: bold;');
   
   // Immediate visual confirmation that script is running
   try {
@@ -66,9 +66,9 @@ function getText(key, params) {
   // CONFIGURATION CONSTANTS  
   const CONFIG = {
     OVERLAY_OPACITY: 0.7,
-    SELECTION_COLOR: { r: 50, g: 200, b: 50, a: 180 }, // Green extraction overlay (different from Auto-Guard's red)
-    CORNER_MARKER_COLOR: { r: 255, g: 255, b: 0, a: 255 }, // Yellow corners like Auto-Guard
-    CORNER_MARKER_SIZE: 12, // Larger markers like Auto-Guard
+    SELECTION_COLOR: { r: 50, g: 200, b: 50, a: 180 }, // Green extraction overlay
+    CORNER_MARKER_COLOR: { r: 255, g: 255, b: 0, a: 255 }, // Yellow corner markers
+    CORNER_MARKER_SIZE: 12, // Corner marker size
     MIN_AREA_SIZE: 1,
     MAX_AREA_SIZE: 2500,
     COLOR_MAP: {
@@ -179,12 +179,12 @@ function getText(key, params) {
   // Use Auto-Image's overlay system - no custom overlay manager needed
   // We'll integrate with the global overlay manager that Auto-Image uses
 
-  // Monitor WPlace paint events to capture pixel coordinates using Auto-Guard's fetch interception method
+  // Monitor WPlace paint events to capture pixel coordinates using fetch interception
   let originalFetch = null;
   let fetchInterceptionActive = false;
   
   function setupPixelCapture() {
-    console.log('🎯 Setting up Auto-Guard style pixel paint monitoring...');
+    console.log('🎯 Setting up pixel paint monitoring...');
     
     try {
       // Store original fetch if not already stored
@@ -192,7 +192,7 @@ function getText(key, params) {
         originalFetch = window.fetch;
       }
       
-      // Install fetch interceptor (Auto-Guard method)
+      // Install fetch interceptor for pixel capture
       if (!fetchInterceptionActive) {
         window.fetch = async (url, options) => {
           // Check if this is a pixel painting request
@@ -256,13 +256,13 @@ function getText(key, params) {
         };
         
         fetchInterceptionActive = true;
-        console.log('✅ Auto-Guard style fetch interception enabled');
+        console.log('✅ Fetch interception enabled');
       }
       
       return true;
       
     } catch (error) {
-      console.warn('⚠️ Could not set up Auto-Guard style paint monitoring:', error);
+      console.warn('⚠️ Could not set up paint monitoring:', error);
       return false;
     }
   }
@@ -360,7 +360,7 @@ function getText(key, params) {
     // If user clicked cancel (coordStr === null), do nothing
   }
   
-  // Add a captured pixel (Auto-Guard style with enhanced validation)
+  // Add a captured pixel with enhanced validation
   function addCapturedPixel(worldX, worldY) {
     if (!state.isCapturing) {
       console.log('Not in capture mode, ignoring pixel');
@@ -400,7 +400,7 @@ function getText(key, params) {
     
     updateUI();
     
-    // Auto-Guard style progress messages
+    // Progress messages
     if (state.capturedPixels.length === 1) {
       showAlert(`✅ Upper-left corner captured: (${worldX}, ${worldY})`, 'success');
       setTimeout(() => {
@@ -419,7 +419,7 @@ function getText(key, params) {
     }
   }
 
-  // Complete area capture when we have 2 pixels (Auto-Guard style with validation)
+  // Complete area capture when we have 2 pixels with validation
   function completeAreaCapture() {
     state.isCapturing = false;
     restoreFetch(); // Restore original fetch function
@@ -436,7 +436,7 @@ function getText(key, params) {
     const maxX = Math.max(...pixels.map(p => p.worldX));
     const maxY = Math.max(...pixels.map(p => p.worldY));
     
-    // Auto-Guard style validation: ensure upper-left is actually upper-left
+    // Validation: ensure upper-left is actually upper-left
     if (minX >= maxX || minY >= maxY) {
       showAlert('❌ Invalid area: upper-left corner must be less than lower-right corner', 'error');
       // Reset capture to try again
@@ -460,7 +460,7 @@ function getText(key, params) {
     }
     
     state.selectionArea = {
-      x1: minX,    // Auto-Guard style naming
+      x1: minX,    // Coordinate naming
       y1: minY,
       x2: maxX,
       y2: maxY,
@@ -502,7 +502,7 @@ function getText(key, params) {
         const canvas = new OffscreenCanvas(width, height);
         const ctx = canvas.getContext('2d');
         
-        // Fill with extraction area overlay (different color from Auto-Guard's protection overlay)
+        // Fill with extraction area overlay
         ctx.fillStyle = `rgba(${CONFIG.SELECTION_COLOR.r}, ${CONFIG.SELECTION_COLOR.g}, ${CONFIG.SELECTION_COLOR.b}, 0.3)`;
         ctx.fillRect(0, 0, width, height);
         
@@ -511,7 +511,7 @@ function getText(key, params) {
         ctx.lineWidth = 2;
         ctx.strokeRect(1, 1, width - 2, height - 2);
         
-        // Add corner markers (like Auto-Guard)
+        // Add corner markers
         const cornerSize = CONFIG.CORNER_MARKER_SIZE;
         ctx.fillStyle = `rgba(${CONFIG.CORNER_MARKER_COLOR.r}, ${CONFIG.CORNER_MARKER_COLOR.g}, ${CONFIG.CORNER_MARKER_COLOR.b}, 1)`;
         
@@ -558,14 +558,14 @@ function getText(key, params) {
       // Continue without overlay - not critical for extraction functionality
     }
   }
-  // Auto-Guard style tile-based pixel scanning for area extraction
+  // Tile-based pixel scanning for area extraction
   async function scanSelectedArea() {
     if (!state.selectionArea) {
       showAlert('No area selected', 'error');
       return;
     }
 
-    console.log('🔍 Starting Auto-Guard style area scan...');
+    console.log('🔍 Starting area scan...');
     state.isScanning = true;
     state.scannedPixels = [];
     updateUI();
@@ -577,7 +577,7 @@ function getText(key, params) {
       
       console.log(`🔍 Analyzing area ${areaWidth}x${areaHeight} from (${x1},${y1}) to (${x2},${y2})`);
       
-      // Auto-Guard style tile calculation
+      // Tile calculation
       const startTileX = Math.floor(x1 / 1000);
       const startTileY = Math.floor(y1 / 1000);
       const endTileX = Math.floor(x2 / 1000);
@@ -586,20 +586,20 @@ function getText(key, params) {
       state.totalPixels = areaWidth * areaHeight;
       let processedPixels = 0;
       
-      // Process each tile that intersects with our area (Auto-Guard method)
+      // Process each tile that intersects with our area
       for (let tileY = startTileY; tileY <= endTileY; tileY++) {
         for (let tileX = startTileX; tileX <= endTileX; tileX++) {
           try {
             console.log(`📄 Processing tile (${tileX}, ${tileY})...`);
             
-            // Download tile data using Auto-Guard's getTileImage method
+            // Download tile data
             const tileBlob = await getTileImage(tileX, tileY);
             if (!tileBlob) {
               console.warn(`⚠️ Could not download tile ${tileX},${tileY}, skipping...`);
               continue;
             }
             
-            // Process tile data like Auto-Guard
+            // Process tile data
             const tileImageData = await processTileBlob(tileBlob);
             if (!tileImageData) {
               console.warn(`⚠️ Could not process tile ${tileX},${tileY}, skipping...`);
@@ -617,14 +617,14 @@ function getText(key, params) {
             const intersectEndX = Math.min(x2 + 1, tileEndX);
             const intersectEndY = Math.min(y2 + 1, tileEndY);
             
-            // Extract pixels from intersection area (Auto-Guard style)
+            // Extract pixels from intersection area
             for (let globalY = intersectStartY; globalY < intersectEndY; globalY++) {
               for (let globalX = intersectStartX; globalX < intersectEndX; globalX++) {
                 // Convert to tile-local coordinates
                 const localX = globalX - tileStartX;
                 const localY = globalY - tileStartY;
                 
-                // Normalize coordinates (Auto-Guard normalization)
+                // Normalize coordinates
                 const normalizedX = (localX % 1000 + 1000) % 1000;
                 const normalizedY = (localY % 1000 + 1000) % 1000;
                 
@@ -633,7 +633,7 @@ function getText(key, params) {
                     normalizedX < tileImageData.width && 
                     normalizedY < tileImageData.height) {
                   
-                  // Extract RGBA values (Auto-Guard method)
+                  // Extract RGBA values
                   const pixelIndex = (normalizedY * tileImageData.width + normalizedX) * 4;
                   const r = tileImageData.data[pixelIndex];
                   const g = tileImageData.data[pixelIndex + 1];
@@ -641,7 +641,7 @@ function getText(key, params) {
                   const a = tileImageData.data[pixelIndex + 3];
                   
                   if (a > 0) { // Skip transparent pixels
-                    // Find closest color in WPlace palette (Auto-Guard method)
+                    // Find closest color in WPlace palette
                     const closestColor = findClosestColor(r, g, b);
                     
                     if (closestColor) {
@@ -675,7 +675,7 @@ function getText(key, params) {
         }
       }
       
-      console.log(`✅ Auto-Guard style scan complete: ${state.scannedPixels.length} pixels extracted`);
+      console.log(`✅ Scan complete: ${state.scannedPixels.length} pixels extracted`);
       showAlert(`✅ Extracted ${state.scannedPixels.length} pixels from area`, 'success');
       
     } catch (error) {
@@ -687,7 +687,7 @@ function getText(key, params) {
     }
   }
   
-  // Auto-Guard's getTileImage function for downloading tiles
+  // Download tile images
   async function getTileImage(tileX, tileY) {
     try {
       const tileUrl = `https://backend.wplace.live/files/s0/tiles/${tileX}/${tileY}.png`;
@@ -702,7 +702,7 @@ function getText(key, params) {
     }
   }
   
-  // Process tile blob into ImageData like Auto-Guard
+  // Process tile blob into ImageData
   async function processTileBlob(blob) {
     try {
       const img = new Image();
@@ -726,14 +726,14 @@ function getText(key, params) {
     }
   }
 
-  // Auto-Guard style color matching using LAB color space for better accuracy
+  // Color matching using LAB color space for better accuracy
   function findClosestColor(r, g, b) {
     if (!CONFIG.COLOR_MAP) return null;
     
     let closestColor = null;
     let minDistance = Infinity;
     
-    // Convert input RGB to LAB color space (Auto-Guard method)
+    // Convert input RGB to LAB color space
     const inputLab = rgbToLab(r, g, b);
     
     for (const [index, colorInfo] of Object.entries(CONFIG.COLOR_MAP)) {
@@ -744,7 +744,7 @@ function getText(key, params) {
       // Convert palette color to LAB
       const paletteLab = rgbToLab(cr, cg, cb);
       
-      // Calculate Delta-E distance (Auto-Guard method)
+      // Calculate Delta-E distance
       const deltaE = calculateDeltaE(inputLab, paletteLab);
       
       if (deltaE < minDistance) {
@@ -756,7 +756,7 @@ function getText(key, params) {
     return closestColor;
   }
   
-  // Auto-Guard's RGB to LAB color space conversion
+  // RGB to LAB color space conversion
   function rgbToLab(r, g, b) {
     // Normalize RGB values
     r = r / 255;
@@ -789,7 +789,7 @@ function getText(key, params) {
     return { l, a, b: bLab };
   }
   
-  // Auto-Guard's Delta-E color difference calculation
+  // Delta-E color difference calculation
   function calculateDeltaE(lab1, lab2) {
     const deltaL = lab1.l - lab2.l;
     const deltaA = lab1.a - lab2.a;
@@ -1483,7 +1483,7 @@ function getText(key, params) {
 
   // Control functions
   function startPixelCapture() {
-    console.log('🎯 Starting Auto-Guard style pixel capture mode...');
+    console.log('🎯 Starting pixel capture mode...');
     
     state.isCapturing = true;
     state.capturedPixels = [];
@@ -1495,7 +1495,7 @@ function getText(key, params) {
       state.overlayManager.disable();
     }
     
-    // Set up Auto-Guard style pixel paint monitoring with fetch interception
+    // Set up pixel paint monitoring with fetch interception
     const setupSuccess = setupPixelCapture();
     
     if (setupSuccess) {
