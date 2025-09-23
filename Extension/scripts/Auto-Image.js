@@ -67,7 +67,7 @@ function getText(key, params) {
       MIN: 3, // Random range minimum
       MAX: 20, // Random range maximum
     },
-    PAINTING_SPEED_ENABLED: true, // On by default
+    PAINTING_SPEED_ENABLED: false, // Off by default
     AUTO_CAPTCHA_ENABLED: true, // Turnstile generator enabled by default
     TOKEN_SOURCE: 'generator', // "generator", "manual", or "hybrid" - default to generator
     COOLDOWN_CHARGE_THRESHOLD: 1, // Default wait threshold
@@ -807,6 +807,180 @@ function getText(key, params) {
     }, text);
   };
 
+  // UNIFIED ACCOUNT MANAGER
+  class AccountManager {
+    constructor() {
+      this.accounts = [];
+      this.currentIndex = 0;
+    }
+    
+    // Load accounts from storage
+    async loadAccounts() {
+      try {
+        // Get tokens from localStorage
+        const tokens = JSON.parse(localStorage.getItem("accounts")) || [];
+        
+        // Get account info from storage
+        const infoAccountsResult = await new Promise((resolve) => {
+          if (typeof chrome !== 'undefined' && chrome.storage) {
+            chrome.storage.local.get('infoAccounts', (result) => {
+              resolve(result.infoAccounts || []);
+            });
+          } else {
+            // Fallback for when chrome storage isn't available
+            resolve([]);
+          }
+        });
+        
+        console.log(`📥 [ACCOUNT MANAGER] Loading ${tokens.length} accounts`);
+        
+        this.accounts = tokens.map((token, index) => {
+          const info = infoAccountsResult.find(acc => acc.token === token);
+          return {
+            token,
+            displayName: info?.displayName || info?.name || `Account ${index + 1}`,
+            ID: info?.ID || null,
+            Charges: info?.Charges || 0,
+            Max: info?.Max || 0,
+            Droplets: info?.Droplets || 0,
+            isCurrent: info?.isCurrent || false,
+            lastUsed: info?.lastUsed || null,
+            lastImported: info?.lastImported || null
+          };
+        });
+        
+        // Find current account index
+        this.currentIndex = this.accounts.findIndex(acc => acc.isCurrent);
+        if (this.currentIndex === -1) this.currentIndex = 0;
+        
+        console.log(`✅ [ACCOUNT MANAGER] Loaded ${this.accounts.length} accounts, current index: ${this.currentIndex}`);
+        console.log(`🎯 [ACCOUNT MANAGER] Current account: ${this.getCurrentAccount()?.displayName || 'None'}`);
+        
+        // Auto-refresh account statuses after loading
+        if (this.accounts.length > 0) {
+          console.log('🔄 [ACCOUNT MANAGER] Auto-refreshing account statuses...');
+          // Use setTimeout to avoid blocking the load operation
+          setTimeout(async () => {
+            try {
+              await fetchAllAccountDetails();
+              console.log('✅ [ACCOUNT MANAGER] Auto-refresh completed');
+            } catch (error) {
+              console.warn('⚠️ [ACCOUNT MANAGER] Auto-refresh failed:', error);
+            }
+          }, 100);
+        }
+        
+        return this.accounts;
+      } catch (error) {
+        console.error('❌ [ACCOUNT MANAGER] Error loading accounts:', error);
+        this.accounts = [];
+        this.currentIndex = 0;
+        return [];
+      }
+    }
+    
+    // Simple linear switching
+    switchToNext() {
+      if (this.accounts.length === 0) return null;
+      
+      const previousIndex = this.currentIndex;
+      this.currentIndex = (this.currentIndex + 1) % this.accounts.length;
+      
+      console.log(`🔄 [ACCOUNT MANAGER] Switching: ${previousIndex} → ${this.currentIndex}`);
+      console.log(`🎯 [ACCOUNT MANAGER] Target: ${this.accounts[this.currentIndex].displayName}`);
+      
+      // Update current flags
+      this.accounts.forEach((acc, idx) => {
+        acc.isCurrent = idx === this.currentIndex;
+      });
+      
+      return this.accounts[this.currentIndex];
+    }
+    
+    getCurrentAccount() {
+      return this.accounts[this.currentIndex] || null;
+    }
+    
+    getAccountByIndex(index) {
+      return this.accounts[index] || null;
+    }
+    
+    updateAccountData(tokenOrData, dataObject = null) {
+      let accountData;
+      let targetAccount;
+      
+      if (dataObject !== null) {
+        // Called with (token, dataObject) format
+        const token = tokenOrData;
+        accountData = dataObject;
+        targetAccount = this.accounts.find(acc => acc.token === token);
+        if (!targetAccount) {
+          console.warn(`⚠️ [ACCOUNT MANAGER] Account with token not found for update`);
+          return;
+        }
+      } else {
+        // Called with (dataObject) format - update current account
+        accountData = tokenOrData;
+        targetAccount = this.getCurrentAccount();
+      }
+      
+      if (targetAccount && accountData) {
+        // Update all provided properties
+        if (accountData.charges !== undefined || accountData.Charges !== undefined) {
+          targetAccount.Charges = Math.floor(accountData.charges || accountData.Charges || 0);
+        }
+        if (accountData.max !== undefined || accountData.Max !== undefined) {
+          targetAccount.Max = Math.floor(accountData.max || accountData.Max || 0);
+        }
+        if (accountData.droplets !== undefined || accountData.Droplets !== undefined) {
+          targetAccount.Droplets = Math.floor(accountData.droplets || accountData.Droplets || 0);
+        }
+        if (accountData.id !== undefined || accountData.ID !== undefined) {
+          targetAccount.ID = accountData.id || accountData.ID || targetAccount.ID;
+        }
+        if (accountData.displayName !== undefined) {
+          targetAccount.displayName = accountData.displayName;
+        }
+        if (accountData.isCurrent !== undefined) {
+          // Clear isCurrent from all accounts first, then set for target
+          this.accounts.forEach(acc => acc.isCurrent = false);
+          targetAccount.isCurrent = accountData.isCurrent;
+        }
+        if (accountData.cooldown !== undefined) {
+          targetAccount.cooldown = accountData.cooldown;
+        }
+        
+        console.log(`📊 [ACCOUNT MANAGER] Updated ${targetAccount.displayName}: ⚡${targetAccount.Charges}/${targetAccount.Max} 💧${targetAccount.Droplets}${targetAccount.isCurrent ? ' (CURRENT)' : ''}`);
+      }
+    }
+    
+    getAccountCount() {
+      return this.accounts.length;
+    }
+    
+    getAllAccounts() {
+      return [...this.accounts]; // Return copy to prevent direct mutation
+    }
+    
+    setCurrentIndex(index) {
+      if (index >= 0 && index < this.accounts.length) {
+        this.currentIndex = index;
+        console.log(`🔄 [ACCOUNT MANAGER] Current index set to: ${index}`);
+      } else {
+        console.warn(`⚠️ [ACCOUNT MANAGER] Invalid index ${index}, keeping current: ${this.currentIndex}`);
+      }
+    }
+    
+    getNextAccount() {
+      if (this.accounts.length === 0) return null;
+      const nextIndex = (this.currentIndex + 1) % this.accounts.length;
+      return this.accounts[nextIndex];
+    }
+  }
+
+  // Create global account manager instance
+  const accountManager = new AccountManager();
+
   // GLOBAL STATE
   const state = {
     running: false,
@@ -815,6 +989,7 @@ function getText(key, params) {
     totalPixels: 0,
     paintedPixels: 0,
     preFilteringDone: false, // Track if pre-filtering detection has been done this session
+    progressResetDone: false, // Track if progress reset has been done this save file session
     availableColors: [],
     activeColorPalette: [], // User-selected colors for conversion
     paintWhitePixels: true, // Default to ON
@@ -874,11 +1049,8 @@ function getText(key, params) {
     _lastSaveTime: 0,
     _saveInProgress: false,
     paintedMap: null,
-    accountIndex: 0,
-    originalAccountOrder: [], // Store the original order of accounts
-    currentActiveIndex: 0, // Track current position in the original order
-    // Account switching state
-    allAccountsInfo: [],
+    accountIndex: 0, // Keep for backward compatibility with existing logic
+    // Legacy state removed - now using accountManager instead
     isFetchingAllAccounts: false,
   };
 
@@ -967,7 +1139,7 @@ function getText(key, params) {
     });
 
     const originalFetch = window.fetch;
-    // Setup fetch interception
+    // Setup fetch interceptions
 
     window.fetch = async function (...args) {
       const response = await originalFetch.apply(this, args);
@@ -1269,6 +1441,12 @@ function getText(key, params) {
         
         console.log('🔍 [DEBUG] Performing Object.assign...');
         Object.assign(window.state, savedData.state);
+        
+        // Reset session-specific flags when loading a new save file
+        window.state.preFilteringDone = false;
+        window.state.progressResetDone = false;
+        console.log('🔄 Reset session flags for new save file load');
+        
         console.log('✅ [DEBUG] Object.assign completed successfully');
         
         // Restore available colors from old save files (backward compatibility)
@@ -1973,9 +2151,6 @@ function getText(key, params) {
 
   async function createUI() {
     await detectLanguage();
-    
-    // Load bot settings before creating UI so values are available
-    loadBotSettings();
 
     const existingContainer = document.getElementById('wplace-image-bot-container');
     const existingStats = document.getElementById('wplace-stats-container');
@@ -2222,6 +2397,9 @@ function getText(key, params) {
                         <input type="number" id="cooldownInput" class="wplace-number-input-compact" min="1" max="999" value="${state.cooldownChargeThreshold}">
                         <button id="cooldownIncrease" class="wplace-input-btn-compact" type="button">+</button>
                         <span id="cooldownValue" class="wplace-input-label-compact">${Utils.t('charges')}</span>
+                        <button id="skipCooldownBtn" class="wplace-btn wplace-btn-warning" style="margin-left: 8px; font-size: 11px; padding: 4px 8px;" disabled title="Skip current cooldown (only available during cooldown)">
+                            <i class="fas fa-fast-forward"></i> Skip
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2532,12 +2710,12 @@ function getText(key, params) {
             </div>
             <div class="wplace-dual-control-compact">
                 <div class="wplace-speed-slider-container-compact">
-                  <input type="range" id="speedSlider" min="${CONFIG.PAINTING_SPEED.MIN}" max="${CONFIG.PAINTING_SPEED.MAX}" value="${CONFIG.PAINTING_SPEED.DEFAULT}" class="wplace-overlay-opacity-slider">
+                  <input type="range" id="speedSlider" min="${CONFIG.PAINTING_SPEED.MIN}" max="${CONFIG.PAINTING_SPEED.MAX}" value="${state.paintingSpeed}" class="wplace-overlay-opacity-slider">
                 </div>
                 <div class="wplace-speed-input-container-compact">
                   <div class="wplace-input-group-compact">
                     <button id="speedDecrease" class="wplace-input-btn-compact" type="button">-</button>
-                    <input type="number" id="speedInput" class="wplace-number-input-compact" min="${CONFIG.PAINTING_SPEED.MIN}" max="${CONFIG.PAINTING_SPEED.MAX}" value="${CONFIG.PAINTING_SPEED.DEFAULT}">
+                    <input type="number" id="speedInput" class="wplace-number-input-compact" min="${CONFIG.PAINTING_SPEED.MIN}" max="${CONFIG.PAINTING_SPEED.MAX}" value="${state.paintingSpeed}">
                     <button id="speedIncrease" class="wplace-input-btn-compact" type="button">+</button>
                     <span id="speedValue" class="wplace-input-label-compact">pixels</span>
                   </div>
@@ -2577,6 +2755,7 @@ function getText(key, params) {
             <input type="checkbox" id="enableSpeedToggle" ${CONFIG.PAINTING_SPEED_ENABLED ? 'checked' : ''
       } class="wplace-speed-checkbox"/>
             <span>${Utils.t('enablePaintingSpeedLimit')}</span>
+            <div class="wplace-speed-toggle-description">When disabled, bot uses all available charges immediately for maximum speed</div>
           </label>
         </div>
         
@@ -3570,6 +3749,20 @@ function getText(key, params) {
         });
       }
 
+      // Speed control toggle
+      const enableSpeedToggle = settingsContainer.querySelector('#enableSpeedToggle');
+      if (enableSpeedToggle) {
+        enableSpeedToggle.addEventListener('change', (e) => {
+          CONFIG.PAINTING_SPEED_ENABLED = e.target.checked;
+          saveBotSettings();
+          console.log(`⚡ Batch speed control: ${CONFIG.PAINTING_SPEED_ENABLED ? 'ON' : 'OFF'}`);
+          const statusText = CONFIG.PAINTING_SPEED_ENABLED
+            ? 'Batch speed control enabled - will use configured batch size'
+            : 'Batch speed control disabled - will use all available charges immediately';
+          Utils.showAlert(statusText, 'success');
+        });
+      }
+
       // (Advanced color listeners moved outside to work with resize dialog)
       // (Advanced color listeners moved outside to work with resize dialog)
       // Notifications listeners
@@ -3658,14 +3851,6 @@ function getText(key, params) {
         console.log(`🔄 Coordinate mode changed to: ${state.coordinateMode}`);
         Utils.showAlert(`Coordinate mode set to: ${state.coordinateMode}`, 'success');
       });
-      
-      // Update coordinate UI after setting up the event listener
-      Utils.updateCoordinateUI({
-        mode: state.coordinateMode,
-        directionControls,
-        snakeControls,
-        blockControls,
-      });
     }
 
     if (coordinateDirectionSelect) {
@@ -3704,21 +3889,13 @@ function getText(key, params) {
 
     if (blockHeightInput) {
       blockHeightInput.value = state.blockHeight;
-      blockHeightInput.addEventListener('input', (e) => {
+      blockHeightInput.addEventListener('change', (e) => {
         const height = parseInt(e.target.value);
         if (height >= 1 && height <= 50) {
           state.blockHeight = height;
           saveBotSettings();
         }
       });
-    }
-
-    // Patch block size inputs with saved values after UI creation
-    if (blockWidthInput) {
-      blockWidthInput.value = state.blockWidth;
-    }
-    if (blockHeightInput) {
-      blockHeightInput.value = state.blockHeight;
     }
 
     if (compactBtn) {
@@ -4217,14 +4394,15 @@ function getText(key, params) {
       // Calculate multi-account statistics
       let totalAllCharges = 0;
       let totalMaxCharges = 0;
-      if (state.allAccountsInfo.length > 0) {
-        totalAllCharges = state.allAccountsInfo.reduce((sum, acc) => sum + Math.floor(acc.Charges || 0), 0);
-        totalMaxCharges = state.allAccountsInfo.reduce((sum, acc) => sum + Math.floor(acc.Max || 0), 0);
+      const accounts = accountManager.getAllAccounts();
+      if (accounts.length > 0) {
+        totalAllCharges = accounts.reduce((sum, acc) => sum + Math.floor(acc.Charges || 0), 0);
+        totalMaxCharges = accounts.reduce((sum, acc) => sum + Math.floor(acc.Max || 0), 0);
       }
 
       statsArea.innerHTML = `
             ${imageStatsHTML}
-            ${state.allAccountsInfo.length > 0 ? `
+            ${accounts.length > 0 ? `
             <div class="wplace-stat-item">
               <div class="wplace-stat-label">
                 <i class="fas fa-coins"></i> Total All Accounts Charges
@@ -5548,6 +5726,12 @@ function getText(key, params) {
           state.totalPixels = totalValidPixels;
           state.paintedPixels = 0;
           state.imageLoaded = true;
+          
+          // Reset session-specific flags when a new image is loaded
+          state.preFilteringDone = false;
+          state.progressResetDone = false;
+          console.log('🔄 Reset session flags for new image load');
+          
           // Keep existing lastPosition to continue from where we left off
           // state.lastPosition = { x: 0, y: 0 }; // REMOVED: Don't reset position
 
@@ -5954,14 +6138,23 @@ function getText(key, params) {
       await ensureToken();
       if (!getTurnstileToken()) return;
 
-      // Only reset painted pixels on first start of session (when pre-filtering hasn't been done)
-      if (!state.preFilteringDone) {
+      // Only reset progress once per save file load session
+      if (!state.progressResetDone) {
         const savedPaintedPixels = state.paintedPixels; // Store original value
         state.paintedPixels = 0;
-        console.log(`🔄 First start this session - reset progress counter for accurate tracking (was: ${savedPaintedPixels})`);
+        state.progressResetDone = true;
+        console.log(`🔄 Reset pixel progress for new save file session (was: ${savedPaintedPixels})`);
         await updateStats(); // Update UI to show 0 progress
+      }
+
+      // Only reset painted pixels on first start of session (when pre-filtering hasn't been done)
+      if (!state.preFilteringDone) {
+        
+        // Perform progressive pixel detection from top-left to bottom-right
+        console.log('🔍 Starting progressive pixel detection from top-left to bottom-right...');
+        await performProgressivePixelDetection();
       } else {
-        console.log('🔄 Continuing session - pre-filtering already done, keeping current progress');
+        console.log('🔄 Continuing session - pre-filtering already done, but progress reset');
       }
 
       state.running = true;
@@ -6075,8 +6268,66 @@ function getText(key, params) {
 
       // Add scroll-to-adjust for cooldown slider
       Utils.createScrollToAdjust(cooldownSlider, updateCooldown, 1, state.maxCharges, 1);
+
+      // Skip cooldown button event handler
+      const skipCooldownBtn = document.getElementById('skipCooldownBtn');
+      if (skipCooldownBtn) {
+        skipCooldownBtn.addEventListener('click', () => {
+          if (state.preciseCurrentCharges < state.cooldownChargeThreshold) {
+            console.log(`[Auto-Image] Skip cooldown requested - resetting to account index 0`);
+            
+            // Reset to account index 0 (start new cycle)
+            state.currentActiveIndex = 0;
+            console.log(`🔄 Reset currentActiveIndex to 0 for new cycle`);
+            
+            // Reset charges to threshold to bypass cooldown
+            state.preciseCurrentCharges = state.cooldownChargeThreshold;
+            console.log(`[Auto-Image] Cooldown skipped! Charges set to threshold: ${state.cooldownChargeThreshold}`);
+            
+            // Switch to first account if we have multiple accounts
+            if (accountManager.getAccountCount() > 1) {
+              const firstAccountInfo = accountManager.getAccountByIndex(0);
+              if (firstAccountInfo && firstAccountInfo.token) {
+                console.log(`🔄 Switching to first account: index 0 (${firstAccountInfo.displayName})`);
+                // Get accounts array for the switch
+                const accounts = JSON.parse(localStorage.getItem("accounts")) || [];
+                if (accounts.length > 0) {
+                  switchToSpecificAccount(firstAccountInfo.token, firstAccountInfo.displayName).then(() => {
+                    console.log(`✅ Successfully switched to account index 0 after cooldown skip`);
+                    // Update UI immediately
+                    updateChargesThresholdUI(0);
+                    // Trigger immediate check for painting
+                    if (state.isEnabled && !state.stopFlag) {
+                      setTimeout(() => {
+                        checkAndPaint();
+                      }, 100);
+                    }
+                  }).catch(err => {
+                    console.error(`❌ Failed to switch to account index 0:`, err);
+                  });
+                } else {
+                  console.warn(`⚠️ No accounts available for switching`);
+                }
+              } else {
+                console.warn(`⚠️ First account info not found or missing token`);
+              }
+            } else {
+              console.log(`📝 Single account mode - no switching needed`);
+              // Update UI immediately
+              updateChargesThresholdUI(0);
+              // Trigger immediate check for painting
+              if (state.isEnabled && !state.stopFlag) {
+                setTimeout(() => {
+                  checkAndPaint();
+                }, 100);
+              }
+            }
+          }
+        });
+      }
     }
 
+    loadBotSettings();
     // Ensure notification poller reflects current settings
     NotificationManager.syncFromState();
   }
@@ -6108,6 +6359,221 @@ function getText(key, params) {
       },
       true
     );
+
+    // Update skip cooldown button state
+    const skipCooldownBtn = document.getElementById('skipCooldownBtn');
+    if (skipCooldownBtn) {
+      const isInCooldown = state.preciseCurrentCharges < threshold && remainingMs > 0;
+      skipCooldownBtn.disabled = !isInCooldown;
+      skipCooldownBtn.title = isInCooldown 
+        ? `Skip cooldown (${timeText} remaining)` 
+        : 'Skip cooldown (only available during cooldown)';
+    }
+  }
+
+  // Fast tile-based pixel detection from top-left to bottom-right
+  async function performProgressivePixelDetection() {
+    if (!state.imageLoaded || !state.imageData) {
+      console.log('⚠️ No image loaded, skipping pixel detection');
+      return;
+    }
+
+    const startTime = performance.now();
+    const { width, height } = state.imageData;
+    const startX = state.startPosition.x;
+    const startY = state.startPosition.y;
+    const regionX = state.region.x;
+    const regionY = state.region.y;
+    
+    let detectedPixels = 0;
+    let totalChecked = 0;
+    
+    console.log(`🚀 Fast scanning ${width}x${height} image from top-left (0,0) to bottom-right (${width-1},${height-1})...`);
+    
+    updateUI('pixelDetection', 'info', { message: 'Fast detecting already painted pixels...' });
+    
+    // Calculate affected tiles
+    const worldX1 = startX;
+    const worldY1 = startY;
+    const worldX2 = startX + width - 1;
+    const worldY2 = startY + height - 1;
+    
+    const startTileX = Math.floor(worldX1 / 1000);
+    const startTileY = Math.floor(worldY1 / 1000);
+    const endTileX = Math.floor(worldX2 / 1000);
+    const endTileY = Math.floor(worldY2 / 1000);
+    
+    console.log(`📄 Processing tiles from (${startTileX},${startTileY}) to (${endTileX},${endTileY})`);
+    
+    // Cache for downloaded tile data
+    const tileDataCache = new Map();
+    
+    // Download and cache all required tiles in parallel
+    const tilePromises = [];
+    for (let tileY = startTileY; tileY <= endTileY; tileY++) {
+      for (let tileX = startTileX; tileX <= endTileX; tileX++) {
+        const absoluteTileX = regionX + tileX;
+        const absoluteTileY = regionY + tileY;
+        const tileKey = `${absoluteTileX},${absoluteTileY}`;
+        
+        tilePromises.push(
+          downloadTileImageData(absoluteTileX, absoluteTileY).then(imageData => {
+            if (imageData) {
+              tileDataCache.set(tileKey, imageData);
+            }
+          }).catch(e => {
+            console.warn(`⚠️ Failed to download tile ${absoluteTileX},${absoluteTileY}:`, e.message);
+          })
+        );
+      }
+    }
+    
+    // Wait for all tiles to download
+    await Promise.all(tilePromises);
+    console.log(`📦 Downloaded ${tileDataCache.size} tiles for fast pixel checking`);
+    
+    // Fast pixel detection using cached tile data
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        totalChecked++;
+        
+        // Check if pixel is eligible for painting
+        const targetPixelInfo = checkPixelEligibility(x, y);
+        if (!targetPixelInfo.eligible) {
+          continue; // Skip non-eligible pixels
+        }
+        
+        // Calculate absolute world coordinates
+        const absX = startX + x;
+        const absY = startY + y;
+        const adderX = Math.floor(absX / 1000);
+        const adderY = Math.floor(absY / 1000);
+        const pixelX = absX % 1000;
+        const pixelY = absY % 1000;
+        const absoluteTileX = regionX + adderX;
+        const absoluteTileY = regionY + adderY;
+        
+        // Check if already marked as painted in local map
+        if (Utils.isPixelPainted(x, y, absoluteTileX, absoluteTileY)) {
+          detectedPixels++;
+          continue;
+        }
+        
+        // Fast pixel color check using cached tile data
+        const tileKey = `${absoluteTileX},${absoluteTileY}`;
+        const tileImageData = tileDataCache.get(tileKey);
+        
+        if (tileImageData) {
+          try {
+            // Direct array access - much faster than canvas operations
+            const tileWidth = tileImageData.width;
+            const tileHeight = tileImageData.height;
+            const data = tileImageData.data;
+            
+            // Ensure pixel coordinates are within tile bounds
+            if (pixelX >= 0 && pixelX < tileWidth && pixelY >= 0 && pixelY < tileHeight) {
+              const pixelIndex = (pixelY * tileWidth + pixelX) * 4;
+              const r = data[pixelIndex];
+              const g = data[pixelIndex + 1];
+              const b = data[pixelIndex + 2];
+              const a = data[pixelIndex + 3];
+              
+              // Check alpha threshold
+              const alphaThresh = state.customTransparencyThreshold || CONFIG.TRANSPARENCY_THRESHOLD;
+              if (a >= alphaThresh) {
+                const existingMappedColor = Utils.resolveColor(
+                  [r, g, b],
+                  state.availableColors,
+                  !state.paintUnavailablePixels
+                );
+                const isAlreadyPainted = existingMappedColor.id === targetPixelInfo.mappedColorId;
+                
+                if (isAlreadyPainted) {
+                  // Check if pixel is already marked as painted to avoid double counting
+                  if (!Utils.isPixelPainted(x, y, absoluteTileX, absoluteTileY)) {
+                    // Mark as painted in the map but DO NOT increment progress counter
+                    // Progress counter should only reflect actual painting sequence position
+                    Utils.markPixelPainted(x, y, absoluteTileX, absoluteTileY);
+                    detectedPixels++;
+                  } else {
+                    // Pixel already tracked, just count it for detection stats
+                    detectedPixels++;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            // Skip pixels we can't check
+            console.warn(`⚠️ Could not check pixel (${x}, ${y}):`, e.message);
+          }
+        }
+        
+        // Update progress periodically
+        if (totalChecked % 2500 === 0) {
+          const progress = Math.round((totalChecked / (width * height)) * 100);
+          updateUI('pixelDetection', 'info', { 
+            message: `Fast detecting... ${progress}% (Found: ${detectedPixels})` 
+          });
+          // Yield control briefly to prevent UI blocking
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+    }
+    
+    const processingTime = Math.round(performance.now() - startTime);
+    console.log(`🏁 Fast pixel detection complete in ${processingTime}ms:`);
+    console.log(`  - Total pixels checked: ${totalChecked}`);
+    console.log(`  - Already painted pixels found: ${detectedPixels}`);
+    console.log(`  - Updated progress: ${state.paintedPixels}/${state.totalPixels}`);
+    console.log(`  - Performance: ${Math.round(totalChecked / (processingTime / 1000))} pixels/second`);
+    
+    // Update progress display
+    await updateStats();
+    updateUI('pixelDetectionComplete', 'success', { 
+      message: `Found ${detectedPixels} already painted pixels in ${processingTime}ms` 
+    });
+  }
+  
+  // Fast tile download and ImageData extraction (similar to Art-Extractor approach)
+  async function downloadTileImageData(tileX, tileY) {
+    try {
+      const tileUrl = `https://backend.wplace.live/files/s0/tiles/${tileX}/${tileY}.png`;
+      const response = await fetch(tileUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      return await processTileBlob(blob);
+    } catch (error) {
+      console.warn(`Failed to download tile ${tileX},${tileY}:`, error.message);
+      return null;
+    }
+  }
+  
+  // Process tile blob into ImageData (adapted from Art-Extractor)
+  async function processTileBlob(blob) {
+    try {
+      const img = new Image();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          resolve(imageData);
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = URL.createObjectURL(blob);
+      });
+    } catch (error) {
+      console.error('Error processing tile blob:', error);
+      return null;
+    }
   }
 
   function generateCoordinates(width, height, mode, direction, snake, blockWidth, blockHeight, startFromX = 0, startFromY = 0) {
@@ -6293,8 +6759,12 @@ function getText(key, params) {
       pixelBatch.regionY
     );
     if (success) {
+      // Only increment progress for actually painted pixels to prevent multiplication
+      const actuallyPaintedCount = pixelBatch.pixels.length;
+      state.paintedPixels += actuallyPaintedCount;
+      console.log(`📊 Added ${actuallyPaintedCount} painted pixels to progress (total: ${state.paintedPixels})`);
+      
       pixelBatch.pixels.forEach((p) => {
-        state.paintedPixels++;
         Utils.markPixelPainted(p.x, p.y, pixelBatch.regionX, pixelBatch.regionY);
       });
 
@@ -6386,16 +6856,17 @@ function getText(key, params) {
               }
             } else {
               // Debug current state
-              console.log(`📊 Account Status - Current ID: ${state.originalAccountOrder[state.currentActiveIndex]?.orderId}, Total IDs: ${state.originalAccountOrder.length}`);
+              const totalAccounts = accountManager.getAccountCount();
+              console.log(`📊 Account Status - Current index: ${accountManager.currentIndex}, Total accounts: ${totalAccounts}`);
 
-              // Check if we're at the last ID in the sequence
-              const isLastAccount = state.currentActiveIndex >= state.originalAccountOrder.length - 1;
-              console.log(`🔍 Is last ID? ${isLastAccount} (ID ${state.originalAccountOrder[state.currentActiveIndex]?.orderId} of ${state.originalAccountOrder.length})`);
+              // Check if we're at the last account in the sequence
+              const isLastAccount = accountManager.currentIndex >= totalAccounts - 1;
+              console.log(`🔍 Is last account? ${isLastAccount} (index ${accountManager.currentIndex} of ${totalAccounts})`);
 
-              if (!isLastAccount) {
-                // Switch to next ID immediately (no cooldown)
-                const nextId = state.originalAccountOrder[state.currentActiveIndex + 1]?.orderId;
-                console.log(`🔄 Switching to next ID ${nextId} (${state.currentActiveIndex + 2}/${state.originalAccountOrder.length})`);
+              if (!isLastAccount && totalAccounts > 1) {
+                // Switch to next account immediately (no cooldown) - only if we have multiple accounts
+                const nextAccount = accountManager.getNextAccount();
+                console.log(`🔄 Switching to next account: ${nextAccount?.displayName} (${accountManager.currentIndex + 2}/${totalAccounts})`);
                 const switchResult = await switchToNextAccount(accounts);
                 if (!switchResult) {
                   console.log('❌ Account switch failed, stopping');
@@ -6404,37 +6875,38 @@ function getText(key, params) {
                 }
                 // Continue painting with new account immediately
                 continue;
+              } else if (totalAccounts === 1) {
+                // Only one account available - use cooldown and continue with same account
+                console.log('ℹ️ Only one account available, entering cooldown period');
+                const cooldownResult = await executeCooldownPeriod();
+                if (cooldownResult === 'stopped') break;
+                console.log('✅ Cooldown complete, continuing with same account');
+                continue;
               } else {
-                // Last account reached - use cooldown then switch to ID 1 (first account)
+                // Last account reached - use cooldown then switch to first account
                 console.log('⏱️ Last account reached, entering cooldown period');
-                console.log(`📊 Current ID: ${state.originalAccountOrder[state.currentActiveIndex]?.orderId}, Last ID: ${state.originalAccountOrder[state.originalAccountOrder.length - 1]?.orderId}`);
+                console.log(`📊 Current account: index ${accountManager.currentIndex}, Last account: index ${totalAccounts - 1}`);
 
                 const cooldownResult = await executeCooldownPeriod();
                 if (cooldownResult === 'stopped') break;
 
-                // After cooldown, switch to ID 1 (first account in order)
-                console.log('🔁 Cooldown complete, switching to ID 1 (first account)');
-                console.log(`🔄 Before switch - Current ID: ${state.originalAccountOrder[state.currentActiveIndex]?.orderId}, Target: ID 1`);
+                // After cooldown, switch to first account
+                console.log('🔁 Cooldown complete, switching to first account');
+                console.log(`🔄 Before switch - Current index: ${accountManager.currentIndex}, Target: index 0`);
 
-                const firstAccountInfo = state.originalAccountOrder[0]; // ID 1 is always at index 0
+                const firstAccountInfo = accountManager.getAccountByIndex(0);
                 const firstAccountToken = firstAccountInfo?.token;
                 
                 if (!firstAccountToken) {
-                  console.log('❌ First account (ID 1) token not found, stopping');
+                  console.log('❌ First account token not found, stopping');
                   state.stopFlag = true;
                   break;
                 }
 
-                // Reset to first position (ID 1)
-                state.currentActiveIndex = 0;
+                // Reset to first position
+                accountManager.setCurrentIndex(0);
                 
-                // Update accountIndex to match the position in accounts array
-                const accountsIndex = accounts.findIndex(token => token === firstAccountToken);
-                if (accountsIndex !== -1) {
-                  state.accountIndex = accountsIndex;
-                }
-
-                const switchResult = await switchToSpecificAccount(firstAccountToken, 0);
+                const switchResult = await switchToSpecificAccount(firstAccountToken, firstAccountInfo.displayName);
                 if (!switchResult) {
                   console.log('❌ Switch to ID 1 failed, stopping');
                   state.stopFlag = true;
@@ -6509,6 +6981,36 @@ function getText(key, params) {
 
     // Paint pixels until we run out of charges or complete the image
     try {
+      // First generate coordinates without filtering to count skipped ones
+      const allCoords = generateCoordinates(
+        width,
+        height,
+        state.coordinateMode,
+        state.coordinateDirection,
+        state.coordinateSnake,
+        state.blockWidth,
+        state.blockHeight,
+        0, // Don't filter here
+        0  // Don't filter here
+      );
+
+      // Find how many coordinates are skipped and set progress accordingly
+      let skippedCoordinates = 0;
+      if (state.lastPosition.x > 0 || state.lastPosition.y > 0) {
+        const startingCoordIndex = allCoords.findIndex(([x, y]) => x === state.lastPosition.x && y === state.lastPosition.y);
+        skippedCoordinates = startingCoordIndex >= 0 ? startingCoordIndex : 0;
+        
+        if (skippedCoordinates > 0) {
+          // Set progress to exactly match skipped coordinates
+          state.paintedPixels = skippedCoordinates;
+          console.log(`📈 Progress set to match skipped coordinates: ${skippedCoordinates} pixels`);
+          console.log(`🔄 Resuming painting from position (${state.lastPosition.x}, ${state.lastPosition.y})`);
+          console.log(`📊 Current progress: ${state.paintedPixels} pixels painted`);
+          await updateStats(); // Update UI to show correct progress
+        }
+      }
+
+      // Now generate the actual filtered coordinates for painting
       const coords = generateCoordinates(
         width,
         height,
@@ -6524,12 +7026,6 @@ function getText(key, params) {
       // OPTIMIZATION: Pre-filter already painted pixels (happens only once per session)
       let eligibleCoords = [];
       let alreadyPaintedCount = 0;
-
-      // Log resume information if applicable
-      if (state.lastPosition.x > 0 || state.lastPosition.y > 0) {
-        console.log(`🔄 Resuming painting from position (${state.lastPosition.x}, ${state.lastPosition.y})`);
-        console.log(`📊 Current progress: ${state.paintedPixels} pixels painted`);
-      }
 
       if (!state.preFilteringDone) {
         console.log('🔍 Pre-filtering already painted pixels (one-time detection for this session)...');
@@ -6570,8 +7066,8 @@ function getText(key, params) {
               const isMatch = mappedCanvasColor.id === targetPixelInfo.mappedColorId;
               if (isMatch) {
                 alreadyPaintedCount++;
-                // Add detected already-painted pixels to progress (after reset to 0)
-                state.paintedPixels++;
+                // Mark as painted in map but DO NOT increment progress counter
+                // Progress should only reflect actual painting sequence position
                 Utils.markPixelPainted(x, y, regionX + adderX, regionY + adderY);
                 continue; // Skip already painted pixels
               }
@@ -6589,10 +7085,10 @@ function getText(key, params) {
 
         // Log pre-filtering results
         if (alreadyPaintedCount > 0) {
-          console.log(`✓ Pre-filter complete: ${alreadyPaintedCount} already painted pixels detected and added to progress`);
+          console.log(`✓ Pre-filter complete: ${alreadyPaintedCount} already painted pixels detected (not added to progress counter)`);
           console.log('ℹ️ This detection will not happen again until a new image/save is loaded');
-          // Update UI to reflect the new progress immediately
-          await updateStats();
+          console.log('📊 Progress counter only reflects actual painting sequence position');
+          // No need to update stats since progress wasn't changed
         }
         skippedPixels.alreadyPainted = alreadyPaintedCount;
       } else {
@@ -6628,7 +7124,9 @@ function getText(key, params) {
             await flushPixelBatch(pixelBatch);
           }
           state.lastPosition = { x, y };
-          // Removed 'Paused at' message from main panel to reduce UI clutter
+          // Show paused coordinates in UI with proper translation template
+          updateUI('paintingPaused', 'warning', { x: x, y: y });
+          console.log(`� Painting paused at coordinates (${x}, ${y})`);
           return 'stopped';
         }
 
@@ -6659,13 +7157,13 @@ function getText(key, params) {
         let pixelX = absX % 1000;
         let pixelY = absY % 1000;
 
-        // CRITICAL FIX: Check if pixel is already painted (both locally and on canvas)
+        // CRITICAL FIX: Always check if pixel is already painted (both locally and on canvas)
         if (Utils.isPixelPainted(x, y, regionX + adderX, regionY + adderY)) {
           console.log(`⏭️ Skipping already painted pixel at (${x}, ${y}) - marked in local map`);
           continue; // Skip already painted pixels
         }
 
-        // REAL-TIME CANVAS CHECK: Like Acc-Switch, verify against actual canvas state
+        // REAL-TIME CANVAS CHECK: Verify against actual canvas state to prevent overpainting
         try {
           const existingColorRGBA = await overlayManager.getTilePixelColor(
             regionX + adderX,
@@ -6681,14 +7179,14 @@ function getText(key, params) {
               state.availableColors,
               !state.paintUnavailablePixels
             );
-            const isAlreadyPainted = existingMappedColor.id === targetPixelInfo.mappedColorId;
+            const isAlreadyCorrect = existingMappedColor.id === targetPixelInfo.mappedColorId;
             
-            if (isAlreadyPainted) {
-              console.log(`⏭️ Skipping already painted pixel at (${x}, ${y}) - verified on canvas (existing: ${existingMappedColor.id}, target: ${targetPixelInfo.mappedColorId})`);
-              // Mark it as painted in local map to avoid future checks
+            if (isAlreadyCorrect) {
+              console.log(`✅ Pixel at (${x}, ${y}) already has correct color (${existingMappedColor.id}) - marking as painted`);
+              // Mark it as painted in local map but DO NOT increment progress counter
+              // Progress should only reflect actual painting sequence position
               Utils.markPixelPainted(x, y, regionX + adderX, regionY + adderY);
-              state.paintedPixels++;
-              continue; // Skip already painted pixels
+              continue; // Skip painting this pixel
             }
           }
         } catch (e) {
@@ -6945,6 +7443,13 @@ function getText(key, params) {
   }
   function calculateBatchSize() {
     let targetBatchSize;
+
+    // If speed control is disabled, use all available charges
+    if (!CONFIG.PAINTING_SPEED_ENABLED) {
+      targetBatchSize = state.displayCharges;
+      console.log(`🚀 Speed control disabled: using all ${targetBatchSize} available charges`);
+      return Math.max(1, targetBatchSize);
+    }
 
     if (state.batchMode === 'random') {
       // Generate random batch size within the specified range
@@ -7213,6 +7718,17 @@ function getText(key, params) {
 
       const coordinateSnakeToggle = document.getElementById('coordinateSnakeToggle');
       if (coordinateSnakeToggle) coordinateSnakeToggle.checked = state.coordinateSnake;
+
+      const settingsContainer = document.getElementById('wplace-settings-container');
+      const directionControls = settingsContainer.querySelector('#directionControls');
+      const snakeControls = settingsContainer.querySelector('#snakeControls');
+      const blockControls = settingsContainer.querySelector('#blockControls');
+      Utils.updateCoordinateUI({
+        mode: state.coordinateMode,
+        directionControls,
+        snakeControls,
+        blockControls,
+      });
 
       const paintUnavailablePixelsToggle = document.getElementById('paintUnavailablePixelsToggle');
       if (paintUnavailablePixelsToggle) {
@@ -7652,15 +8168,24 @@ function getText(key, params) {
   async function getAccounts() {
     return new Promise((resolve, reject) => {
       console.log("Requesting accounts from extension...");
+      
+      // Set timeout for extension response
+      const timeout = setTimeout(() => {
+        window.removeEventListener("message", handler);
+        reject(new Error("Extension response timeout"));
+      }, 5000); // 5 second timeout
+      
       // Ask extension for accounts
       window.postMessage({
         source: "my-userscript",
         type: "getAccounts"
       }, "*");
+      
       function handler(event) {
         if (event.source !== window) return;
         if (event.data.source !== "extension") return;
         if (event.data.type === "accountsData") {
+          clearTimeout(timeout);
           window.removeEventListener("message", handler);
           // Save to localStorage
           try {
@@ -7675,6 +8200,7 @@ function getText(key, params) {
       window.addEventListener("message", handler);
     });
   }
+
   async function fetchAccount() {
     const { ID, Charges, Max, Droplets } = await WPlaceService.fetchCheck();
     console.log("User's ID :", ID);
@@ -7698,218 +8224,130 @@ function getText(key, params) {
 
     const accountsListArea = document.getElementById('accountsListArea');
     if (accountsListArea) {
-      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">Fetching account details...</div>`;
+      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">Loading accounts...</div>`;
     }
 
-    let originalToken = null;
-    let originalAccountData = null;
-
     try {
-      await getAccounts();
-      const accountsTokens = JSON.parse(localStorage.getItem("accounts")) || [];
-      if (accountsTokens.length === 0) {
-        if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">No accounts found.</div>`;
+      // First, get accounts from the extension
+      console.log(`🔄 [FETCH] Requesting accounts from extension...`);
+      try {
+        await getAccounts();
+        console.log(`✅ [FETCH] Successfully retrieved accounts from extension`);
+      } catch (error) {
+        console.warn(`⚠️ [FETCH] Failed to get accounts from extension:`, error);
+        // Continue anyway in case we have cached accounts
+      }
+      
+      // Load accounts using the new AccountManager
+      await accountManager.loadAccounts();
+      
+      console.log(`✅ [FETCH] Loaded ${accountManager.getAccountCount()} accounts from storage`);
+      
+      // Debug: Check if we actually have accounts
+      if (accountManager.getAccountCount() === 0) {
+        console.warn(`⚠️ [FETCH] No accounts found in storage. Check localStorage 'accounts' and chrome.storage 'infoAccounts'`);
+        
+        // Check localStorage for accounts
+        const localStorageAccounts = JSON.parse(localStorage.getItem("accounts")) || [];
+        console.log(`📋 [DEBUG] localStorage accounts:`, localStorageAccounts);
+        
+        // Render empty state and return early
+        renderAccountsList();
         return;
       }
-
-      // Store original account info to switch back later
-      originalAccountData = await WPlaceService.getCharges();
-      originalToken = accountsTokens.find(token => {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          return payload.userId === originalAccountData.id;
-        } catch (e) {
-          return false;
-        }
-      });
-
-      state.allAccountsInfo = [];
-      renderAccountsList();
-
-      // Temporarily disable the strict guard for controlled refresh operation
-      const originalRunningState = state.running;
-      state.running = true; // Temporarily enable to allow controlled switching
-
-      console.log('🔓 Temporarily enabling controlled account switching for refresh');
-
-      for (let i = 0; i < accountsTokens.length; i++) {
-        const token = accountsTokens[i];
-
-        console.log(`📋 Fetching details for account ${i + 1}/${accountsTokens.length}`);
-
-        // Controlled account switch for data fetching
-        const swapResult = await swapAccountTrigger(token);
-        if (!swapResult) {
-          console.warn(`⚠️ Failed to trigger swap for account ${i + 1}`);
-          continue;
-        }
-
-        // Wait for account switch to complete
-        let retries = 0;
-        let accountData = null;
-        while (retries < 8 && !accountData) {
-          // await Utils.sleep(1000);
-          try {
-            const fetchedInfo = await WPlaceService.fetchCheck();
-            const chargesInfo = await WPlaceService.getCharges();
-            if (fetchedInfo.ID) {
-              accountData = {
-                ...fetchedInfo,
-                Charges: Math.floor(chargesInfo.charges),
-                Max: Math.floor(chargesInfo.max),
-                Droplets: Math.floor(chargesInfo.droplets)
-              };
-            }
-          } catch (e) {
-            retries++;
-            console.warn(`⚠️ Retry ${retries}/8 for account ${i + 1}`);
-          }
-        }
-
-        if (accountData) {
-          const actualName = accountData.Username || accountData.name || `User${accountData.ID}`;
-          const isCurrentAccount = accountData.ID === originalAccountData.id;
-
-          state.allAccountsInfo.push({
-            ...accountData,
-            token,
-            displayName: actualName,
-            isCurrent: isCurrentAccount
-          });
-
-          console.log(`✅ Fetched details for: ${actualName} (${accountData.Charges}/${accountData.Max} charges)`);
-        } else {
-          // Fallback for failed accounts
-          const fallbackName = `Account ${i + 1}`;
-          state.allAccountsInfo.push({
-            token,
-            ID: `...${token.slice(-4)}`,
-            displayName: fallbackName,
-            isCurrent: false,
-            error: 'Failed to fetch details'
-          });
-          console.warn(`❌ Failed to fetch details for account ${i + 1}`);
-        }
-
-        renderAccountsList();
-      }
-
-      // Restore original state and switch back to original account
-      state.running = originalRunningState;
-      console.log('🔒 Restored original running state and switching back to original account');
-
-    } catch (error) {
-      console.error("Error fetching all account details:", error);
-      if (accountsListArea) accountsListArea.innerHTML = `<div class="wplace-stat-item" style="color: red;">Error loading accounts.</div>`;
-    } finally {
-      // Switch back to original account
-      if (originalToken) {
-        console.log('🔄 Switching back to original account...');
-        const originalRunningState = state.running;
-        state.running = true; // Temporarily enable for switch back
-
-        await swapAccountTrigger(originalToken);
-        await Utils.sleep(2000);
-
-        // Verify we're back on the original account
-        try {
-          const verifyData = await WPlaceService.getCharges();
-          if (verifyData.id === originalAccountData.id) {
-            console.log('✅ Successfully switched back to original account');
-          }
-        } catch (e) {
-          console.warn('⚠️ Could not verify switch back to original account');
-        }
-
-        state.running = originalRunningState; // Restore state
-      }
-
-      // Update current account info in the list
-      if (originalAccountData) {
-        const currentAccountInList = state.allAccountsInfo.find(acc => acc.ID === originalAccountData.id);
-        if (currentAccountInList) {
-          currentAccountInList.isCurrent = true;
-          currentAccountInList.Charges = Math.floor(originalAccountData.charges);
-          currentAccountInList.Max = Math.floor(originalAccountData.max);
-          currentAccountInList.Droplets = Math.floor(originalAccountData.droplets);
-        }
-      }
-
-      // Keep original account order - do NOT rearrange the array
-      // Instead, assign IDs based on current account being ID 1
-      const currentAccountIndex = state.allAccountsInfo.findIndex(acc => acc.isCurrent);
       
-      if (currentAccountIndex !== -1) {
-        console.log(`🎯 Current account found at array position ${currentAccountIndex}`);
+      // Now fetch fresh data for each account
+      const accounts = accountManager.getAllAccounts();
+      if (accounts.length > 0) {
+        console.log(`🔄 [FETCH] Fetching fresh data for ${accounts.length} accounts...`);
         
-        // Assign IDs: current account gets ID 1, others get sequential IDs
-        state.allAccountsInfo.forEach((acc, index) => {
-          if (acc.isCurrent) {
-            acc.orderId = 1; // Current account always gets ID 1
-          } else {
-            // Other accounts get IDs based on their position relative to current
-            const relativePosition = index > currentAccountIndex ? 
-              (index - currentAccountIndex + 1) : 
-              (state.allAccountsInfo.length - currentAccountIndex + index + 1);
-            acc.orderId = relativePosition;
+        // Remember the current account so we can switch back
+        const originalCurrentAccount = accounts.find(acc => acc.isCurrent);
+        
+        for (let i = 0; i < accounts.length; i++) {
+          const account = accounts[i];
+          console.log(`📊 [FETCH] Fetching data for account ${i + 1}: ${account.displayName}`);
+          
+          try {
+            // Switch to this account temporarily to fetch its data
+            console.log(`🔄 [FETCH] Switching to ${account.displayName} to fetch fresh data...`);
+            await switchToSpecificAccount(account.token, account.displayName);
+            await Utils.sleep(500); // Small delay to ensure switch takes effect
+            
+            // Fetch fresh account details
+            const accountData = await WPlaceService.getCharges();
+            const accountInfo = await WPlaceService.fetchCheck();
+            
+            // Update account with fresh data
+            accountManager.updateAccountData(account.token, {
+              ID: accountData.id || accountInfo.ID,
+              Charges: Math.floor(accountData.charges || 0),
+              Max: Math.floor(accountData.max || 0), 
+              Droplets: Math.floor(accountData.droplets || 0),
+              displayName: accountInfo.Username || accountInfo.name || account.displayName
+            });
+            
+            console.log(`✅ [FETCH] Updated ${account.displayName}: ⚡${Math.floor(accountData.charges)}/${Math.floor(accountData.max)} 💧${Math.floor(accountData.droplets)}`);
+            
+          } catch (error) {
+            console.warn(`⚠️ [FETCH] Failed to fetch data for ${account.displayName}:`, error);
           }
-        });
+        }
         
-        // Sort the display order by orderId for UI, but keep original array intact
-        const sortedForDisplay = [...state.allAccountsInfo].sort((a, b) => a.orderId - b.orderId);
+        // Switch back to the original current account if there was one
+        if (originalCurrentAccount) {
+          console.log(`🔙 [FETCH] Switching back to original current account: ${originalCurrentAccount.displayName}`);
+          try {
+            await switchToSpecificAccount(originalCurrentAccount.token, originalCurrentAccount.displayName);
+            await Utils.sleep(300);
+            
+            // Mark it as current again
+            accountManager.updateAccountData(originalCurrentAccount.token, {
+              isCurrent: true
+            });
+          } catch (error) {
+            console.warn(`⚠️ [FETCH] Failed to switch back to original account:`, error);
+          }
+        }
         
-        // Create the switching order array (ID 1 first, then sequential)
-        state.originalAccountOrder = sortedForDisplay;
-        
-        // Find the current account's position in the switching order (should be 0 since it's ID 1)
-        state.currentActiveIndex = 0; // Current account (ID 1) is always first in switching order
-        state.accountIndex = currentAccountIndex; // Keep track of original array position
-        
-        console.log(`📋 Account IDs assigned:`);
-        state.allAccountsInfo.forEach((acc) => {
-          console.log(`  Array pos ${state.allAccountsInfo.indexOf(acc)}: ID ${acc.orderId} - ${acc.displayName}${acc.isCurrent ? ' (CURRENT)' : ''}`);
-        });
-        
-        console.log(`📋 Switching order (by ID):`);
-        state.originalAccountOrder.forEach((acc, idx) => {
-          console.log(`  Switch pos ${idx}: ID ${acc.orderId} - ${acc.displayName}${acc.isCurrent ? ' (CURRENT)' : ''}`);
-        });
-      } else {
-        console.warn('⚠️ No current account found, using original order');
-        state.allAccountsInfo.forEach((acc, index) => {
-          acc.orderId = index + 1;
-        });
-        state.originalAccountOrder = [...state.allAccountsInfo];
-        state.currentActiveIndex = 0;
-        state.accountIndex = 0;
+        console.log(`🎯 [FETCH] Completed fetching fresh data for all accounts`);
       }
-
-      await updateStats();
+      
+      // Render the accounts list with fresh data
       renderAccountsList();
-
+      
+    } catch (error) {
+      console.error('❌ [FETCH] Error fetching account details:', error);
+      if (accountsListArea) {
+        accountsListArea.innerHTML = `<div class="wplace-stat-item" style="color: red;">Error loading accounts.</div>`;
+      }
+    } finally {
       state.isFetchingAllAccounts = false;
       if (refreshBtn) {
         refreshBtn.innerHTML = '<i class="fas fa-users-cog"></i>';
         refreshBtn.disabled = false;
       }
-
-      console.log('✅ Account list refresh completed with full details');
     }
   }
 
   // Function to update current account charges in the account list
   async function updateCurrentAccountInList() {
-    if (state.allAccountsInfo.length === 0) return;
+    if (accountManager.getAccountCount() === 0) return;
 
     // Find current account in the list and update its charges
-    const currentAccountInList = state.allAccountsInfo.find(acc => acc.isCurrent);
-    if (currentAccountInList) {
+    const currentAccount = accountManager.getCurrentAccount();
+    if (currentAccount) {
       const { charges, cooldown } = await WPlaceService.getCharges();
       state.displayCharges = Math.floor(charges);
       state.preciseCurrentCharges = charges;
       await updateStats();
-      currentAccountInList.Charges = Math.floor(state.displayCharges || state.preciseCurrentCharges || 0);
-      currentAccountInList.Max = state.maxCharges;
+      
+      // Update the current account data in AccountManager
+      accountManager.updateAccountData(currentAccount.token, {
+        Charges: Math.floor(state.displayCharges || state.preciseCurrentCharges || 0),
+        Max: state.maxCharges
+      });
+      
       // Re-render the account list to show updated charges
       renderAccountsList();
     }
@@ -7917,36 +8355,52 @@ function getText(key, params) {
 
   // Function to update current account spotlight when switching during painting
   async function updateCurrentAccountSpotlight() {
-    if (state.allAccountsInfo.length === 0) return;
+    if (accountManager.getAccountCount() === 0) return;
     await Utils.sleep(500); // Wait a bit for the switch to take effect
     try {
       const currentAccountData = await WPlaceService.getCharges();
       console.log("Current account after switch:", currentAccountData);
       console.log(`🔍 Switched to account with ID: ${currentAccountData.id}`);
       
-      // Update all accounts to not be current
-      state.allAccountsInfo.forEach(acc => acc.isCurrent = false);
-
-      // Find and mark the new current account in the original array
-      const newCurrentAccount = state.allAccountsInfo.find(acc => acc.ID === currentAccountData.id);
-      if (newCurrentAccount) {
+      // Find the current account in AccountManager and update it
+      const accounts = accountManager.getAllAccounts();
+      const currentAccount = accounts.find(acc => acc.ID === currentAccountData.id);
+      
+      if (currentAccount) {
         const currentAccountInfo = await WPlaceService.fetchCheck();
-        newCurrentAccount.isCurrent = true;
-        newCurrentAccount.Charges = Math.floor(currentAccountData.charges);
-        newCurrentAccount.Max = Math.floor(currentAccountData.max);
-        newCurrentAccount.Droplets = Math.floor(currentAccountData.droplets);
-        newCurrentAccount.displayName = currentAccountInfo.Username || currentAccountInfo.name || newCurrentAccount.displayName;
-
-        console.log(`🎯 Updated current account spotlight: ${newCurrentAccount.displayName} (ID ${newCurrentAccount.orderId})`);
         
-        // Update the switching order array to reflect the current account change
-        const switchingOrderIndex = state.originalAccountOrder.findIndex(acc => acc.orderId === newCurrentAccount.orderId);
-        if (switchingOrderIndex !== -1) {
-          state.originalAccountOrder[switchingOrderIndex] = newCurrentAccount;
-          // DON'T update currentActiveIndex here - it's managed by switchToNextAccount()
-          console.log(`🎯 Updated account data at switching order index ${switchingOrderIndex} (ID ${newCurrentAccount.orderId})`);
-          console.log(`📊 Current state: activeIndex=${state.currentActiveIndex}, expectedIndex=${switchingOrderIndex}`);
-        }
+        // Update account data in AccountManager
+        accountManager.updateAccountData(currentAccount.token, {
+          isCurrent: true,
+          Charges: Math.floor(currentAccountData.charges),
+          Max: Math.floor(currentAccountData.max),
+          Droplets: Math.floor(currentAccountData.droplets),
+          displayName: currentAccountInfo.Username || currentAccountInfo.name || currentAccount.displayName
+        });
+        
+        console.log(`🎯 Updated current account spotlight: ${currentAccount.displayName}`);
+        
+        // Re-render the account list to show new current account
+        renderAccountsList();
+
+
+
+          
+
+          console.log(`🔒 PRESERVING currentActiveIndex: ${state.currentActiveIndex} (do not recalculate from isCurrent flag)`);
+          console.log(`� Account at currentActiveIndex ${state.currentActiveIndex}: ${state.originalAccountOrder[state.currentActiveIndex]?.displayName} (ID ${state.originalAccountOrder[state.currentActiveIndex]?.orderId})`);
+          
+          // Update accountIndex to match original array position
+          const originalArrayIndex = state.allAccountsInfo.findIndex(acc => acc.isCurrent);
+          if (originalArrayIndex !== -1) {
+            state.accountIndex = originalArrayIndex;
+          }
+          
+          console.log(`📊 Final state: activeIndex=${state.currentActiveIndex}, accountIndex=${state.accountIndex}, orderId=${newCurrentAccount.orderId}`);
+        
+        console.warn(`⚠️ Could not find account ID ${newCurrentAccount.orderId} in switching order`);
+        
+        console.warn(`⚠️ Could not find switched account with ID ${currentAccountData.id} in account list`);
       }
 
       // Re-render the account list to show new current account
@@ -7962,191 +8416,175 @@ function getText(key, params) {
     if (!accountsListArea) return;
 
     accountsListArea.innerHTML = '';
-    if (state.allAccountsInfo.length === 0) {
-      accountsListArea.innerHTML = `<div class="wplace-stat-item" style="opacity: 0.5;">No account data. Click <i class="fas fa-users-cog"></i> to refresh.</div>`;
+    
+    const accounts = accountManager.getAllAccounts();
+    console.log(`🔍 [RENDER] Rendering ${accounts.length} accounts`);
+    
+    // Debug: Log account data to see what we're working with
+    accounts.forEach((account, index) => {
+      console.log(`📊 [RENDER] Account ${index + 1}: ${account.displayName} - ⚡${account.Charges}/${account.Max} 💧${account.Droplets} ${account.isCurrent ? '(CURRENT)' : ''}`);
+    });
+    
+    if (accounts.length === 0) {
+      // Don't show any placeholder - just leave empty
+      console.log(`📝 [RENDER] No accounts to display`);
       return;
     }
 
-    // Render accounts in switching order (sorted by orderId)
-    state.originalAccountOrder.forEach((info, switchIndex) => {
-      const item = document.createElement('div');
-      
-      // Determine if this is the current account or next in sequence
-      const isCurrentAccount = info.isCurrent;
-      const isNextInSequence = state.currentActiveIndex !== -1 && 
-        ((state.currentActiveIndex + 1) % state.originalAccountOrder.length) === switchIndex;
-      
-      let itemClasses = 'wplace-account-item';
-      if (isCurrentAccount) {
-        itemClasses += ' current';
-      } else if (isNextInSequence) {
-        itemClasses += ' next-in-sequence';
-      }
-      
-      item.className = itemClasses;
-
-      // Create ordering number element with order ID
-      const orderNumber = document.createElement('div');
-      orderNumber.className = 'wplace-account-number';
-      orderNumber.textContent = info.orderId; // Always show the assigned order ID
-      
-      // Add visual indicator for current position in sequence
-      if (isCurrentAccount) {
-        orderNumber.style.background = '#2ecc71'; // Green color
-        orderNumber.style.color = 'white';
-        orderNumber.style.boxShadow = '0 0 10px rgba(46, 204, 113, 0.8)';
-        orderNumber.title = `Order ID ${info.orderId} - Currently active account`;
-        
-        // Add a subtle pulsing effect to the account number for extra visibility
-        orderNumber.style.animation = 'currentAccountNumberPulse 1.5s ease-in-out infinite alternate';
-      } else if (isNextInSequence) {
-        orderNumber.style.background = '#f39c12'; // Orange color
-        orderNumber.style.color = 'white';
-        orderNumber.style.boxShadow = '0 0 8px rgba(243, 156, 18, 0.6)';
-        orderNumber.title = `Order ID ${info.orderId} - Next account in switching sequence`;
-      } else {
-        orderNumber.style.background = ''; // Reset to default
-        orderNumber.style.boxShadow = ''; // Remove any glow
-        orderNumber.title = `Order ID ${info.orderId}`;
-        orderNumber.style.animation = ''; // Remove any animation
-      }
-
-      const displayName = info.displayName || `Account ${index + 1}`;
-
-      const details = document.createElement('div');
-      details.className = 'wplace-account-details';
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'wplace-account-name';
-      nameDiv.textContent = displayName;
-      nameDiv.title = displayName;
-      details.appendChild(nameDiv);
-
-      let stats;
-      if (info.error) {
-        stats = document.createElement('div');
-        stats.className = 'wplace-account-stats';
-        stats.style.color = 'red';
-        stats.textContent = 'Error';
-      } else {
-        stats = document.createElement('div');
-        stats.className = 'wplace-account-stats';
-        stats.innerHTML = `
-          <span><i class="fas fa-bolt"></i> ${Math.floor(info.Charges || 0)}/${Math.floor(info.Max || 0)}</span>
-          <span><i class="fas fa-tint"></i> ${Math.floor(info.Droplets || 0)}</span>
-        `;
-      }
-
-      item.appendChild(orderNumber);
-      item.appendChild(details);
-      item.appendChild(stats);
+    accounts.forEach((account, index) => {
+      const item = createAccountItem(account, index);
       accountsListArea.appendChild(item);
     });
+    
+    console.log(`✅ [RENDER] Successfully rendered ${accounts.length} accounts`);
   }
 
-  // Account switching helper functions
+  function createAccountItem(account, index) {
+    const item = document.createElement('div');
+    
+    // Determine if this is the current account
+    const isCurrentAccount = account.isCurrent;
+    const isNextInSequence = accountManager.currentIndex !== -1 && 
+      ((accountManager.currentIndex + 1) % accountManager.getAccountCount()) === index;
+    
+    let itemClasses = 'wplace-account-item';
+    if (isCurrentAccount) {
+      itemClasses += ' current';
+    } else if (isNextInSequence) {
+      itemClasses += ' next-in-sequence';
+    }
+    
+    item.className = itemClasses;
+
+    // Create ordering number element with 1-based index for user display
+    const orderNumber = document.createElement('div');
+    orderNumber.className = 'wplace-account-number';
+    orderNumber.textContent = index + 1; // Show 1-based index for user-friendly display
+    
+    // Add visual indicator for current position in sequence
+    if (isCurrentAccount) {
+      orderNumber.style.background = '#2ecc71'; // Green color
+      orderNumber.style.color = 'white';
+      orderNumber.style.boxShadow = '0 0 10px rgba(46, 204, 113, 0.8)';
+    } else if (isNextInSequence) {
+      orderNumber.style.background = '#f39c12'; // Orange color for next
+      orderNumber.style.color = 'white';
+      orderNumber.style.boxShadow = '0 0 8px rgba(243, 156, 18, 0.6)';
+    }
+
+    // Create account details
+    const details = document.createElement('div');
+    details.className = 'wplace-account-details';
+    
+    const accountName = document.createElement('div');
+    accountName.className = 'wplace-account-name';
+    const displayName = account.displayName || account.name || `Account ${index + 1}`;
+    accountName.textContent = displayName;
+    accountName.title = displayName;
+    
+    const accountStats = document.createElement('div');
+    accountStats.className = 'wplace-account-stats';
+    
+    // Safely handle undefined values
+    const charges = account.Charges !== undefined ? Math.floor(account.Charges) : 0;
+    const max = account.Max !== undefined ? Math.floor(account.Max) : 0;
+    const droplets = account.Droplets !== undefined ? Math.floor(account.Droplets) : 0;
+    
+    accountStats.innerHTML = `
+      <span><i class="fas fa-bolt"></i> ${charges}/${max}</span>
+      <span><i class="fas fa-tint"></i> ${droplets}</span>
+    `;
+    
+    details.appendChild(accountName);
+    details.appendChild(accountStats);
+    
+    // Add status indicators
+    const status = document.createElement('div');
+    status.className = 'wplace-account-status';
+    if (isCurrentAccount) {
+      status.innerHTML = '<i class="fas fa-play-circle" style="color: #2ecc71;" title="Current Account"></i>';
+    } else if (isNextInSequence) {
+      status.innerHTML = '<i class="fas fa-arrow-right" style="color: #f39c12;" title="Next Account"></i>';
+    }
+    
+    item.appendChild(orderNumber);
+    item.appendChild(details);
+    item.appendChild(status);
+    
+    return item;
+  }
+
+  // SIMPLIFIED ACCOUNT SWITCHING
   async function switchToNextAccount(accounts) {
-    const previousActiveIndex = state.currentActiveIndex;
+    console.log(`🔄 [SWITCH] Starting account switch`);
     
-    // Move to next account in strict ID order (next position in switching order)
-    const nextIndex = (state.currentActiveIndex + 1) % state.originalAccountOrder.length;
-    
-    // Get the account info from switching order
-    const nextAccountInfo = state.originalAccountOrder[nextIndex];
-    const prevAccountInfo = state.originalAccountOrder[previousActiveIndex];
-    
-    // Strict validation: ensure ID 1 always goes to ID 2
-    if (prevAccountInfo?.orderId === 1 && nextAccountInfo?.orderId !== 2) {
-      console.error(`❌ STRICT ORDER VIOLATION: ID 1 must switch to ID 2, but found ID ${nextAccountInfo?.orderId}`);
-      // Find ID 2 account
-      const id2Account = state.originalAccountOrder.find(acc => acc.orderId === 2);
-      if (id2Account) {
-        const id2Index = state.originalAccountOrder.indexOf(id2Account);
-        console.log(`🔄 Correcting: Forcing switch from ID 1 to ID 2 (index ${id2Index})`);
-        state.currentActiveIndex = id2Index;
-      } else {
-        console.error(`❌ FATAL: No ID 2 account found in switching order!`);
-        return false;
-      }
-    } else {
-      state.currentActiveIndex = nextIndex;
-    }
-    
-    // Re-get account info after potential correction
-    const finalNextAccountInfo = state.originalAccountOrder[state.currentActiveIndex];
-    
-    console.log(`🔄 Switching from ID ${prevAccountInfo?.orderId} (${prevAccountInfo?.displayName || 'Unknown'}) to ID ${finalNextAccountInfo?.orderId} (${finalNextAccountInfo?.displayName || 'Unknown'})`);
-    console.log(`📍 Index progression: ${previousActiveIndex} → ${state.currentActiveIndex} (order: ${prevAccountInfo?.orderId} → ${finalNextAccountInfo?.orderId})`);
-    
-    // Find the token for this account by matching the account in the original allAccountsInfo array
-    const originalAccountIndex = state.allAccountsInfo.findIndex(acc => acc.orderId === finalNextAccountInfo?.orderId);
-    if (originalAccountIndex === -1) {
-      console.warn(`⚠️ Could not find account with ID ${finalNextAccountInfo?.orderId} in original array`);
+    // Validate we have accounts
+    if (accountManager.getAccountCount() === 0) {
+      console.error('❌ No accounts available for switching');
       return false;
     }
     
-    const nextToken = finalNextAccountInfo?.token;
-    console.log(`🔑 Next token for ID ${finalNextAccountInfo?.orderId}: ${nextToken ? nextToken.substring(0, 20) + '...' : 'INVALID'}`);
-    console.log(`🔍 Expected account: ${finalNextAccountInfo?.displayName} (ID ${finalNextAccountInfo?.orderId})`);
-    
-    if (!nextToken) {
-      console.warn(`⚠️ Invalid token for ID ${finalNextAccountInfo?.orderId}, skipping...`);
+    // Get next account using simplified manager
+    const nextAccount = accountManager.switchToNext();
+    if (!nextAccount) {
+      console.error('❌ Failed to get next account');
       return false;
     }
     
-    // Update accountIndex to match the position in the accounts token array
-    const accountsIndex = accounts.findIndex(token => token === nextToken);
-    if (accountsIndex !== -1) {
-      state.accountIndex = accountsIndex;
-      console.log(`🔗 Found token at accounts array index: ${accountsIndex}`);
-      console.log(`🔍 Token from accounts[${accountsIndex}]: ${accounts[accountsIndex].substring(0, 20)}...`);
-    } else {
-      console.warn(`⚠️ Token not found in accounts array for ID ${finalNextAccountInfo?.orderId}`);
-      console.warn(`🔍 Available accounts tokens: ${accounts.map((t, i) => `[${i}] ${t.substring(0, 20)}...`).join(', ')}`);
+    console.log(`🎯 [SWITCH] Switching to: ${nextAccount.displayName} (index ${accountManager.currentIndex})`);
+    
+    // Ensure token exists
+    if (!nextAccount.token) {
+      console.error(`❌ Missing token for account: ${nextAccount.displayName}`);
       return false;
     }
     
-    return await switchToSpecificAccount(nextToken, state.currentActiveIndex);
+    console.log(`� [SWITCH] Using token: ${nextAccount.token.substring(0, 20)}...`);
+    
+    // Perform the account switch
+    try {
+      await swapAccountTrigger(nextAccount.token);
+      
+      // Update account index for backward compatibility
+      state.accountIndex = accountManager.currentIndex;
+      
+      console.log(`✅ [SWITCH] Successfully switched to ${nextAccount.displayName}`);
+      
+      // Re-render the accounts list
+      renderAccountsList();
+      
+      return true;
+    } catch (error) {
+      console.error('❌ [SWITCH] Account switch failed:', error);
+      return false;
+    }
   }
 
-  async function switchToSpecificAccount(token, originalOrderIndex) {
-    // Get account name and ID for better logging
-    const accountInfo = state.originalAccountOrder && state.originalAccountOrder[originalOrderIndex]
-      ? state.originalAccountOrder[originalOrderIndex]
-      : null;
-    const accountName = accountInfo?.displayName || `Account ${originalOrderIndex + 1}`;
-    const accountId = accountInfo?.orderId || (originalOrderIndex + 1);
-
-    console.log(`🔄 Attempting to switch to ID ${accountId} (${accountName})`);
-    console.log(`🔑 Using token: ${token.substring(0, 20)}...`);
+  // SIMPLIFIED helper function for specific account switching
+  async function switchToSpecificAccount(token, accountName) {
+    console.log(`🔄 [SPECIFIC SWITCH] Attempting to switch to account: ${accountName}`);
+    console.log(`🔑 [SPECIFIC SWITCH] Using token: ${token.substring(0, 20)}...`);
 
     await swapAccountTrigger(token);
 
-    // Give more time for the initial swap to process (like Acc-Switch.js)
-    // console.log('⏳ Waiting 5 seconds for initial swap processing...');
-    // await new Promise(resolve => setTimeout(resolve, 5000));
-
-    let maxRetries = 20; // Match Acc-Switch.js retry count
+    let maxRetries = 20;
     let retryCount = 0;
     let swapSuccess = false;
 
     while (!swapSuccess && retryCount < maxRetries) {
-      console.log(`⏳ Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
-
-      // Wait for a short period before checking (like Acc-Switch.js)
+      console.log(`⏳ [SPECIFIC SWITCH] Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       try {
-        // Use the same verification method as Acc-Switch.js
         await fetchAccount();
-        console.log('✅ Account swap confirmed.');
+        console.log('✅ [SPECIFIC SWITCH] Account swap confirmed.');
         swapSuccess = true;
       } catch (error) {
-        console.warn('❌ Account swap not yet successful. Retrying...', error);
+        console.warn('❌ [SPECIFIC SWITCH] Account swap not yet successful. Retrying...', error);
         retryCount++;
 
-        // Re-trigger swap every 5 attempts
         if (retryCount % 5 === 0) {
-          console.log('🔄 Re-triggering account swap...');
+          console.log('🔄 [SPECIFIC SWITCH] Re-triggering account swap...');
           await swapAccountTrigger(token);
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
@@ -8158,17 +8596,16 @@ function getText(key, params) {
       state.displayCharges = Math.floor(charges);
       state.preciseCurrentCharges = charges;
       state.cooldown = cooldown;
-      // Don't update state.accountIndex here as it should be managed by the calling function
       Utils.performSmartSave();
       await updateStats();
 
-      // Update account list spotlight to show new current account
-      await updateCurrentAccountSpotlight();
+      // Update account data in manager
+      accountManager.updateAccountData({ charges, cooldown });
 
-      console.log(`✅ Successfully switched to ID ${accountId} (${accountName}) with ${Math.floor(charges)} charges`);
+      console.log(`✅ [SPECIFIC SWITCH] Successfully switched to ${accountName} with ${Math.floor(charges)} charges`);
       return true;
     } else {
-      console.error(`❌ Failed to swap to ID ${accountId} (${accountName}) after multiple retries.`);
+      console.error(`❌ [SPECIFIC SWITCH] Failed to swap to ${accountName} after multiple retries.`);
       return false;
     }
   }
@@ -8218,7 +8655,23 @@ function getText(key, params) {
     // Generate token automatically after UI is ready
     setTimeout(initializeTokenGenerator, 1000);
 
-    // Auto-refresh account list on startup
+    // Quick initial account load from cache
+    setTimeout(async () => {
+      console.log('🔄 Initial account load from cache...');
+      try {
+        await accountManager.loadAccounts();
+        if (accountManager.getAccountCount() > 0) {
+          console.log(`✅ Loaded ${accountManager.getAccountCount()} cached accounts`);
+          renderAccountsList();
+        } else {
+          console.log('📭 No cached accounts found');
+        }
+      } catch (error) {
+        console.warn('⚠️ Initial account load failed:', error);
+      }
+    }, 500);
+
+    // Auto-refresh account list on startup (with extension communication)
     setTimeout(() => {
       console.log('🔄 Auto-refreshing account list on startup...');
       fetchAllAccountDetails();
