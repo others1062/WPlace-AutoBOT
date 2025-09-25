@@ -51,6 +51,12 @@ function getText(key, params) {
 
   console.log('%c🚀 WPlace AutoBot Auto-Image Starting...', 'color: #00ff41; font-weight: bold; font-size: 16px;');
 
+  const buyTypes = [
+    'none',
+    'max_charges',
+    'paint_charges'
+  ];
+
   // CONFIGURATION CONSTANTS
   const CONFIG = {
     COOLDOWN_DEFAULT: 31000,
@@ -364,6 +370,10 @@ function getText(key, params) {
     COORDINATE_BLOCK_WIDTH: 6,
     COORDINATE_BLOCK_HEIGHT: 2,
     autoSwap: true,
+    autoBuy: buyTypes[2],
+    autoBuyToggle: false,
+    maxChargesStopEnable: false,
+    maxChargesBeforeStop: 1500,
   };
 
   // Expose CONFIG globally for the utils manager and other modules
@@ -813,13 +823,13 @@ function getText(key, params) {
       this.accounts = [];
       this.currentIndex = 0;
     }
-    
+
     // Load accounts from storage
     async loadAccounts() {
       try {
         // Get tokens from localStorage
         const tokens = JSON.parse(localStorage.getItem("accounts")) || [];
-        
+
         // Get account info from storage
         const infoAccountsResult = await new Promise((resolve) => {
           if (typeof chrome !== 'undefined' && chrome.storage) {
@@ -831,9 +841,9 @@ function getText(key, params) {
             resolve([]);
           }
         });
-        
+
         console.log(`📥 [ACCOUNT MANAGER] Loading ${tokens.length} accounts`);
-        
+
         this.accounts = tokens.map((token, index) => {
           const info = infoAccountsResult.find(acc => acc.token === token);
           return {
@@ -848,14 +858,14 @@ function getText(key, params) {
             lastImported: info?.lastImported || null
           };
         });
-        
+
         // Find current account index
         this.currentIndex = this.accounts.findIndex(acc => acc.isCurrent);
         if (this.currentIndex === -1) this.currentIndex = 0;
-        
+
         console.log(`✅ [ACCOUNT MANAGER] Loaded ${this.accounts.length} accounts, current index: ${this.currentIndex}`);
         console.log(`🎯 [ACCOUNT MANAGER] Current account: ${this.getCurrentAccount()?.displayName || 'None'}`);
-        
+
         // Auto-refresh account statuses after loading
         if (this.accounts.length > 0) {
           console.log('🔄 [ACCOUNT MANAGER] Auto-refreshing account statuses...');
@@ -869,7 +879,7 @@ function getText(key, params) {
             }
           }, 100);
         }
-        
+
         return this.accounts;
       } catch (error) {
         console.error('❌ [ACCOUNT MANAGER] Error loading accounts:', error);
@@ -878,37 +888,37 @@ function getText(key, params) {
         return [];
       }
     }
-    
+
     // Simple linear switching
     switchToNext() {
       if (this.accounts.length === 0) return null;
-      
+
       const previousIndex = this.currentIndex;
       this.currentIndex = (this.currentIndex + 1) % this.accounts.length;
-      
+
       console.log(`🔄 [ACCOUNT MANAGER] Switching: ${previousIndex} → ${this.currentIndex}`);
       console.log(`🎯 [ACCOUNT MANAGER] Target: ${this.accounts[this.currentIndex].displayName}`);
-      
+
       // Update current flags
       this.accounts.forEach((acc, idx) => {
         acc.isCurrent = idx === this.currentIndex;
       });
-      
+
       return this.accounts[this.currentIndex];
     }
-    
+
     getCurrentAccount() {
       return this.accounts[this.currentIndex] || null;
     }
-    
+
     getAccountByIndex(index) {
       return this.accounts[index] || null;
     }
-    
+
     updateAccountData(tokenOrData, dataObject = null) {
       let accountData;
       let targetAccount;
-      
+
       if (dataObject !== null) {
         // Called with (token, dataObject) format
         const token = tokenOrData;
@@ -923,7 +933,7 @@ function getText(key, params) {
         accountData = tokenOrData;
         targetAccount = this.getCurrentAccount();
       }
-      
+
       if (targetAccount && accountData) {
         // Update all provided properties
         if (accountData.charges !== undefined || accountData.Charges !== undefined) {
@@ -949,19 +959,19 @@ function getText(key, params) {
         if (accountData.cooldown !== undefined) {
           targetAccount.cooldown = accountData.cooldown;
         }
-        
+
         console.log(`📊 [ACCOUNT MANAGER] Updated ${targetAccount.displayName}: ⚡${targetAccount.Charges}/${targetAccount.Max} 💧${targetAccount.Droplets}${targetAccount.isCurrent ? ' (CURRENT)' : ''}`);
       }
     }
-    
+
     getAccountCount() {
       return this.accounts.length;
     }
-    
+
     getAllAccounts() {
       return [...this.accounts]; // Return copy to prevent direct mutation
     }
-    
+
     setCurrentIndex(index) {
       if (index >= 0 && index < this.accounts.length) {
         this.currentIndex = index;
@@ -970,7 +980,7 @@ function getText(key, params) {
         console.warn(`⚠️ [ACCOUNT MANAGER] Invalid index ${index}, keeping current: ${this.currentIndex}`);
       }
     }
-    
+
     getNextAccount() {
       if (this.accounts.length === 0) return null;
       const nextIndex = (this.currentIndex + 1) % this.accounts.length;
@@ -1008,6 +1018,7 @@ function getText(key, params) {
     region: null,
     minimized: false,
     lastPosition: { x: 0, y: 0 },
+    lastPaintedPosition: { x: 0, y: 0 }, // Track last successfully painted coordinate
     estimatedTime: 0,
     language: 'en',
     paintingSpeed: CONFIG.PAINTING_SPEED.DEFAULT, // pixels batch size
@@ -1021,7 +1032,8 @@ function getText(key, params) {
     overlayOpacity: CONFIG.OVERLAY.OPACITY_DEFAULT,
     blueMarbleEnabled: CONFIG.OVERLAY.BLUE_MARBLE_DEFAULT,
     ditheringEnabled: true,
-	invertColorEnabled: false,
+	  invertColorEnabled: false,
+    ditheringEnabled: true,
     // Advanced color matching settings
     colorMatchingAlgorithm: 'lab',
     enableChromaPenalty: true,
@@ -1430,25 +1442,25 @@ function getText(key, params) {
         console.log('🔍 [DEBUG] RestoreProgress: Starting restoration...');
         console.log('🔍 [DEBUG] SavedData exists:', !!savedData);
         console.log('🔍 [DEBUG] SavedData.state exists:', !!savedData?.state);
-        
+
         if (!savedData || !savedData.state) {
           console.error('❌ [DEBUG] RestoreProgress: Invalid savedData or missing state');
           return false;
         }
-        
+
         console.log('🔍 [DEBUG] Current window.state keys before restore:', Object.keys(window.state || {}));
         console.log('🔍 [DEBUG] SavedData.state keys:', Object.keys(savedData.state));
-        
+
         console.log('🔍 [DEBUG] Performing Object.assign...');
         Object.assign(window.state, savedData.state);
-        
+
         // Reset session-specific flags when loading a new save file
         window.state.preFilteringDone = false;
         window.state.progressResetDone = false;
         console.log('🔄 Reset session flags for new save file load');
-        
+
         console.log('✅ [DEBUG] Object.assign completed successfully');
-        
+
         // Restore available colors from old save files (backward compatibility)
         if (savedData.state.availableColors && Array.isArray(savedData.state.availableColors)) {
           console.log('🔍 [DEBUG] Restoring availableColors, count:', savedData.state.availableColors.length);
@@ -1463,7 +1475,7 @@ function getText(key, params) {
           console.log('🔍 [DEBUG] Restoring imageData...');
           console.log('🔍 [DEBUG] ImageData type check - pixels is array:', Array.isArray(savedData.imageData.pixels));
           console.log('🔍 [DEBUG] ImageData pixels length:', savedData.imageData.pixels?.length);
-          
+
           window.state.imageData = {
             ...savedData.imageData,
             pixels: new Uint8ClampedArray(savedData.imageData.pixels),
@@ -1481,7 +1493,7 @@ function getText(key, params) {
         } else {
           console.log('🔍 [DEBUG] No paintedMap found in savedData (this is normal for extracted data)');
         }
-        
+
         console.log('✅ [DEBUG] RestoreProgress completed successfully');
         console.log('🔍 [DEBUG] Final window.state.imageLoaded:', window.state.imageLoaded);
         console.log('🔍 [DEBUG] Final window.state.totalPixels:', window.state.totalPixels);
@@ -1544,44 +1556,44 @@ function getText(key, params) {
       try {
         console.log('🔍 [DEBUG] Starting file upload process...');
         const data = await Utils.createFileUploader();
-        
+
         console.log('🔍 [DEBUG] File upload completed. Data type:', typeof data);
         console.log('🔍 [DEBUG] Data exists:', !!data);
-        
+
         if (!data) {
           console.error('❌ [DEBUG] No data received from file uploader');
           throw new Error('No data received from file');
         }
-        
+
         console.log('🔍 [DEBUG] Data keys:', Object.keys(data));
         console.log('🔍 [DEBUG] Data.state exists:', !!data.state);
         console.log('🔍 [DEBUG] Data.imageData exists:', !!data.imageData);
         console.log('🔍 [DEBUG] Data.version:', data.version);
         console.log('🔍 [DEBUG] Data.timestamp:', data.timestamp);
-        
+
         if (!data.state) {
           console.error('❌ [DEBUG] Missing state object in loaded data');
           console.log('🔍 [DEBUG] Available top-level keys:', Object.keys(data));
           throw new Error('Invalid file format - missing state object');
         }
-        
+
         console.log('🔍 [DEBUG] State object keys:', Object.keys(data.state));
         console.log('🔍 [DEBUG] State.imageLoaded:', data.state.imageLoaded);
         console.log('🔍 [DEBUG] State.totalPixels:', data.state.totalPixels);
         console.log('🔍 [DEBUG] State.startPosition:', data.state.startPosition);
         console.log('🔍 [DEBUG] State.region:', data.state.region);
-        
+
         if (data.imageData) {
           console.log('🔍 [DEBUG] ImageData width:', data.imageData.width);
           console.log('🔍 [DEBUG] ImageData height:', data.imageData.height);
           console.log('🔍 [DEBUG] ImageData pixels length:', data.imageData.pixels?.length);
           console.log('🔍 [DEBUG] ImageData totalPixels:', data.imageData.totalPixels);
         }
-        
+
         console.log('🔍 [DEBUG] Calling restoreProgress...');
         const success = Utils.restoreProgress(data);
         console.log('🔍 [DEBUG] RestoreProgress result:', success);
-        
+
         return success;
       } catch (error) {
         console.error('❌ [DEBUG] Error in loadProgressFromFile:', error);
@@ -1594,22 +1606,22 @@ function getText(key, params) {
       try {
         console.log('🔍 [DEBUG] Starting Art-Extractor file upload process...');
         const data = await Utils.createFileUploader();
-        
+
         console.log('🔍 [DEBUG] File upload completed. Data type:', typeof data);
         console.log('🔍 [DEBUG] Data exists:', !!data);
         console.log('📖 Raw loaded data:', data);
-        
+
         if (!data) {
           console.error('❌ [DEBUG] No data received from file uploader');
           return null;
         }
-        
+
         console.log('🔍 [DEBUG] Data keys:', Object.keys(data));
         console.log('🔍 [DEBUG] Data.state exists:', !!data.state);
         console.log('🔍 [DEBUG] Data.imageData exists:', !!data.imageData);
         console.log('🔍 [DEBUG] Data.version:', data.version);
         console.log('🔍 [DEBUG] Data.timestamp:', data.timestamp);
-        
+
         console.log('🔍 [DEBUG] Returning raw data object for Load Extracted feature');
         return data;
       } catch (error) {
@@ -2483,6 +2495,19 @@ function getText(key, params) {
           </div>
         </div>
 
+        <div class="wplace-section" id="autobuy-section">
+          <div class="wplace-section-title" style="justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-shopping-cart"></i>
+              <span>Auto Buy Charges</span>
+            </div>
+            <label class="wplace-switch">
+              <input type="checkbox" id="autoBuyToggle" disabled>
+              <span class="wplace-slider-round"></span>
+            </label>
+          </div>
+        </div>
+
         <div class="wplace-section" id="all-accounts-section">
           <div class="wplace-section-title">
             <i class="fas fa-users"></i>
@@ -3050,6 +3075,15 @@ function getText(key, params) {
           Height: <span id="heightValue">0</span>px
           <input type="range" id="heightSlider" class="resize-slider" min="10" max="500" value="100">
         </label>
+        
+        <!-- Edit button moved here after height slider -->
+        <div class="edit-button-container" style="margin: 15px 0; text-align: center;">
+          <button id="editImageBtn" class="wplace-btn wplace-btn-select">
+            <i class="fas fa-paint-brush"></i>
+            <span>Edit</span>
+          </button>
+        </div>
+        
         <label class="resize-checkbox-label">
           <input type="checkbox" id="keepAspect" checked>
           ${Utils.t('keepAspectRatio')}
@@ -3441,6 +3475,33 @@ function getText(key, params) {
         autoSwapToggle.addEventListener('change', (e) => {
           CONFIG.autoSwap = e.target.checked;
           console.log(`🔄 Auto-swap ${CONFIG.autoSwap ? 'enabled' : 'disabled'}`);
+          
+          // Handle autoBuy toggle dependency
+          const autoBuyToggle = statsContainer.querySelector('#autoBuyToggle');
+          if (autoBuyToggle) {
+            if (!CONFIG.autoSwap) {
+              // If autoSwap is disabled, disable and uncheck autoBuy
+              autoBuyToggle.disabled = true;
+              autoBuyToggle.checked = false;
+              CONFIG.autoBuyToggle = false;
+              console.log(`💰 Auto-buy disabled (requires auto-swap)`);
+            } else {
+              // If autoSwap is enabled, enable autoBuy toggle
+              autoBuyToggle.disabled = false;
+            }
+          }
+        });
+      }
+
+      // Auto Buy toggle logic
+      const autoBuyToggle = statsContainer.querySelector('#autoBuyToggle');
+      if (autoBuyToggle) {
+        autoBuyToggle.checked = CONFIG.autoBuyToggle;
+        autoBuyToggle.disabled = !CONFIG.autoSwap; // Disable if autoSwap is off
+        
+        autoBuyToggle.addEventListener('change', (e) => {
+          CONFIG.autoBuyToggle = e.target.checked;
+          console.log(`💰 Auto-buy ${CONFIG.autoBuyToggle ? 'enabled' : 'disabled'}`);
         });
       }
 
@@ -3809,6 +3870,7 @@ function getText(key, params) {
     const maskCtx = maskCanvas.getContext('2d');
     const confirmResize = resizeContainer.querySelector('#confirmResize');
     const cancelResize = resizeContainer.querySelector('#cancelResize');
+    const editImageBtn = resizeContainer.querySelector('#editImageBtn');
     const downloadPreviewBtn = resizeContainer.querySelector('#downloadPreviewBtn');
     const clearIgnoredBtn = resizeContainer.querySelector('#clearIgnoredBtn');
 
@@ -4065,15 +4127,15 @@ function getText(key, params) {
       loadFromFileBtn.addEventListener('click', async () => {
         console.log('🔍 [DEBUG] Load from file button clicked');
         console.log('🔍 [DEBUG] Initial setup complete:', state.initialSetupComplete);
-        
+
         try {
           // First check if we can load the file - this will tell us if it has complete data
           console.log('🔍 [DEBUG] Starting file upload...');
           const fileData = await Utils.createFileUploader();
-          
+
           console.log('🔍 [DEBUG] File data received:', !!fileData);
           console.log('🔍 [DEBUG] File data keys:', fileData ? Object.keys(fileData) : 'N/A');
-          
+
           if (!fileData || !fileData.state) {
             console.error('❌ [DEBUG] Invalid file data or missing state');
             console.log('🔍 [DEBUG] FileData:', fileData);
@@ -4085,7 +4147,7 @@ function getText(key, params) {
           const hasCompleteData = fileData.state && fileData.imageData &&
             fileData.state.availableColors &&
             fileData.state.availableColors.length > 0;
-            
+
           console.log('🔍 [DEBUG] Has complete data check:');
           console.log('  - fileData.state:', !!fileData.state);
           console.log('  - fileData.imageData:', !!fileData.imageData);
@@ -4102,10 +4164,10 @@ function getText(key, params) {
           console.log('🔍 [DEBUG] Calling restoreProgress...');
           const success = Utils.restoreProgress(fileData);
           console.log('🔍 [DEBUG] RestoreProgress result:', success);
-          
+
           if (success) {
             console.log('✅ [DEBUG] File loaded successfully');
-            
+
             // CRITICAL FIX: Set initial setup complete if file had complete data
             if (hasCompleteData) {
               console.log('🔍 [DEBUG] Setting initialSetupComplete to true due to complete data');
@@ -4154,7 +4216,7 @@ function getText(key, params) {
         } catch (error) {
           console.error('❌ [DEBUG] Error in file load process:', error);
           console.error('❌ [DEBUG] Error stack:', error.stack);
-          
+
           if (error.message === 'Invalid JSON file') {
             console.error('❌ [DEBUG] Invalid JSON file detected');
             Utils.showAlert(Utils.t('invalidFileFormat'), 'error');
@@ -4396,8 +4458,26 @@ function getText(key, params) {
       let totalMaxCharges = 0;
       const accounts = accountManager.getAllAccounts();
       if (accounts.length > 0) {
-        totalAllCharges = accounts.reduce((sum, acc) => sum + Math.floor(acc.Charges || 0), 0);
-        totalMaxCharges = accounts.reduce((sum, acc) => sum + Math.floor(acc.Max || 0), 0);
+        // Use real-time charges for current account, stored data for others
+        const currentAccount = accountManager.getCurrentAccount();
+        totalAllCharges = accounts.reduce((sum, acc) => {
+          if (currentAccount && acc.token === currentAccount.token) {
+            // Use real-time data for current account
+            return sum + Math.floor(state.displayCharges || state.preciseCurrentCharges || 0);
+          } else {
+            // Use stored data for other accounts
+            return sum + Math.floor(acc.Charges || 0);
+          }
+        }, 0);
+        totalMaxCharges = accounts.reduce((sum, acc) => {
+          if (currentAccount && acc.token === currentAccount.token) {
+            // Use real-time max charges for current account
+            return sum + Math.floor(state.maxCharges || acc.Max || 0);
+          } else {
+            // Use stored data for other accounts
+            return sum + Math.floor(acc.Max || 0);
+          }
+        }, 0);
       }
 
       statsArea.innerHTML = `
@@ -4459,7 +4539,7 @@ function getText(key, params) {
       const movePanel = document.createElement('div');
       movePanel.id = 'moveArtworkPanel';
       movePanel.className = 'wplace-move-panel';
-      
+
       movePanel.innerHTML = `
         <div class="wplace-header">
           <div class="wplace-header-title">
@@ -4484,33 +4564,33 @@ function getText(key, params) {
           <div></div>
         </div>
       `;
-      
+
       // No overlay - append directly to body like other panels
       document.body.appendChild(movePanel);
-      
+
       // Make the panel draggable
       makeDraggable(movePanel);
-      
+
       // Add event listeners for movement
       let currentMessageTimeout = null;
-      
+
       function moveArtwork(deltaX, deltaY) {
         if (state.startPosition && state.region) {
           const newX = state.startPosition.x + deltaX;
           const newY = state.startPosition.y + deltaY;
-          
+
           console.log(`🔄 Moving artwork from (${state.startPosition.x}, ${state.startPosition.y}) to (${newX}, ${newY})`);
-          
+
           state.startPosition.x = newX;
           state.startPosition.y = newY;
-          
+
           // Clear any existing message timeout and alerts immediately
           if (currentMessageTimeout) {
             clearTimeout(currentMessageTimeout);
             currentMessageTimeout = null;
           }
           Utils.hideAlert(); // Hide current alert immediately
-          
+
           // Update overlay position if available
           if (overlayManager) {
             overlayManager.setPosition(state.startPosition, state.region)
@@ -4539,12 +4619,12 @@ function getText(key, params) {
           Utils.showAlert('Please select a position first before moving artwork', 'warning');
         }
       }
-      
+
       document.getElementById('moveUp').addEventListener('click', () => moveArtwork(0, -1));
       document.getElementById('moveDown').addEventListener('click', () => moveArtwork(0, 1));
       document.getElementById('moveLeft').addEventListener('click', () => moveArtwork(-1, 0));
       document.getElementById('moveRight').addEventListener('click', () => moveArtwork(1, 0));
-      
+
       // Close panel
       function closeMovePanel() {
         if (currentMessageTimeout) {
@@ -4554,7 +4634,7 @@ function getText(key, params) {
         Utils.hideAlert();
         document.body.removeChild(movePanel);
       }
-      
+
       document.getElementById('closeMovePanel').addEventListener('click', closeMovePanel);
     }
 
@@ -4689,6 +4769,7 @@ function getText(key, params) {
         canvasStack.style.width = newWidth + 'px';
         canvasStack.style.height = newHeight + 'px';
         baseCtx.imageSmoothingEnabled = false;
+        
         if (!state.availableColors || state.availableColors.length === 0) {
           if (baseProcessor !== processor && (!baseProcessor.img || !baseProcessor.canvas)) {
             await baseProcessor.load();
@@ -4701,6 +4782,7 @@ function getText(key, params) {
           updateZoomLayout();
           return;
         }
+        
         if (baseProcessor !== processor && (!baseProcessor.img || !baseProcessor.canvas)) {
           await baseProcessor.load();
         }
@@ -5606,6 +5688,10 @@ function getText(key, params) {
 
       cancelResize.onclick = closeResizeDialog;
 
+      editImageBtn.onclick = () => {
+        showEditPanel();
+      };
+
       resizeOverlay.style.display = 'block';
       resizeContainer.style.display = 'block';
 
@@ -5663,6 +5749,1537 @@ function getText(key, params) {
       _ditherWorkBuf = null;
       _ditherEligibleBuf = null;
       _resizeDialogCleanup = null;
+    }
+
+    function showEditPanel() {
+      try {
+        // Validate that we have a valid base canvas
+        if (!baseCanvas || !baseCanvas.width || !baseCanvas.height) {
+          Utils.showAlert('No image available for editing. Please upload an image first.', 'error');
+          return;
+        }
+        
+        // Hide resize panel
+        resizeContainer.style.display = 'none';
+        
+        // Create edit panel if it doesn't exist
+        let editOverlay = document.getElementById('editOverlay');
+        if (!editOverlay) {
+          createEditPanel();
+          editOverlay = document.getElementById('editOverlay');
+        }
+        
+        // Get current image data from baseCanvas
+        const imageData = baseCanvas.toDataURL();
+        
+        // Initialize edit panel with current image
+        initializeEditPanel(imageData);
+        
+        // Show edit panel
+        editOverlay.style.display = 'block';
+        
+        console.log('✨ Pixel Art Editor opened successfully');
+      } catch (error) {
+        console.error('Error opening pixel art editor:', error);
+        Utils.showAlert('Failed to open pixel art editor. Please try again.', 'error');
+      }
+    }
+
+    function createEditPanel() {
+      const editOverlay = document.createElement('div');
+      editOverlay.id = 'editOverlay';
+      editOverlay.className = 'edit-overlay';
+      
+      editOverlay.innerHTML = `
+        <div class="edit-container">
+          <div class="edit-header">
+            <div class="edit-header-left">
+              <h3>Manual Pixel Art Editor</h3>
+              <div class="edit-instructions">
+                <small>🖱️ Left click: Draw | Right click/Ctrl+drag: Pan | Mouse wheel: Zoom</small>
+              </div>
+            </div>
+            <div class="edit-nav-controls">
+              <div class="zoom-controls">
+                <button id="editZoomOut" class="zoom-btn" title="Zoom Out (Ctrl + -)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13H5v-2h14v2z"/>
+                  </svg>
+                </button>
+                <select id="zoomSelect" class="zoom-select" title="Zoom Level">
+                  <option value="0.1">10%</option>
+                  <option value="0.25">25%</option>
+                  <option value="0.5">50%</option>
+                  <option value="0.75">75%</option>
+                  <option value="1" selected>100%</option>
+                  <option value="1.5">150%</option>
+                  <option value="2">200%</option>
+                  <option value="3">300%</option>
+                  <option value="4">400%</option>
+                  <option value="6">600%</option>
+                  <option value="8">800%</option>
+                  <option value="12">1200%</option>
+                  <option value="16">1600%</option>
+                  <option value="24">2400%</option>
+                  <option value="32">3200%</option>
+                </select>
+                <button id="editZoomIn" class="zoom-btn" title="Zoom In (Ctrl + +)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                  </svg>
+                </button>
+                <button id="zoomFit" class="zoom-btn" title="Fit to Window (Ctrl + 0)">📰</button>
+                <button id="zoom100" class="zoom-btn" title="Actual Size (Ctrl + 1)">1:1</button>
+              </div>
+              <div class="edit-controls">
+                <button id="editBackBtn" class="wplace-btn wplace-btn-secondary">← Back</button>
+                <button id="editApplyBtn" class="wplace-btn wplace-btn-confirm">Apply Changes</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="edit-content">
+            <div class="edit-main-area">
+              <div class="edit-toolbar">
+                <div class="edit-tool-group">
+                  <label>Tools:</label>
+                  <button id="paintBrush" class="edit-tool active" data-tool="paint" title="Brush (B)">🖌</button>
+                  <button id="eraseTool" class="edit-tool" data-tool="erase" title="Eraser (E)">🗑</button>
+                  <button id="eyedropperTool" class="edit-tool" data-tool="eyedropper" title="Eyedropper (I)">💉</button>
+                  <button id="fillTool" class="edit-tool" data-tool="fill" title="Fill (F)">🪣</button>
+                </div>
+                
+                <div class="edit-tool-group">
+                  <label>Brush Size:</label>
+                  <input type="range" id="brushSize" min="1" max="20" value="1" class="edit-slider" title="Use [ ] keys">
+                  <span id="brushSizeValue">1</span>
+                  <button id="showGrid" class="edit-toggle" title="Toggle Grid (G)">⊞</button>
+                </div>
+                
+                <div class="edit-tool-group">
+                  <button id="undoBtn" class="wplace-btn wplace-btn-secondary" title="Undo (Ctrl+Z)">↶</button>
+                  <button id="redoBtn" class="wplace-btn wplace-btn-secondary" title="Redo (Ctrl+Shift+Z)">↷</button>
+                  <button id="resetViewBtn" class="wplace-btn wplace-btn-secondary" title="Reset View">🔄</button>
+                </div>
+              </div>
+              
+              <div class="edit-canvas-area">
+                <div class="edit-canvas-container" id="editCanvasContainer">
+                  <div class="edit-canvas-wrapper" id="editCanvasWrapper">
+                    <canvas id="editCanvas" class="edit-canvas"></canvas>
+                  </div>
+                  <div class="minimap-container" id="minimapContainer">
+                    <div class="minimap-header">Navigator</div>
+                    <div class="minimap-content">
+                      <canvas id="minimapCanvas" class="minimap-canvas"></canvas>
+                      <div id="minimapViewport" class="minimap-viewport"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="edit-bottom-bar">
+              <div class="edit-info-section">
+                <span id="editStatusBar">Position: (0, 0) | Color: #000000 | Zoom: 100%</span>
+              </div>
+              <div class="edit-current-color">
+                <label>Current:</label>
+                <div id="currentColorDisplay" class="color-display"></div>
+              </div>
+              <div class="edit-available-colors">
+                <label>Available Colors (<span id="editColorCount">0</span>):</label>
+                <div id="editColorGrid" class="edit-color-grid">
+                  <!-- Colors will be populated here -->
+                </div>
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(editOverlay);
+      
+      // Set up event handlers
+      setupEditPanelEvents();
+    }
+
+    function setupEditPanelEvents() {
+      const editBackBtn = document.getElementById('editBackBtn');
+      const editApplyBtn = document.getElementById('editApplyBtn');
+      const paintBrush = document.getElementById('paintBrush');
+      const eraseTool = document.getElementById('eraseTool');
+      const eyedropperTool = document.getElementById('eyedropperTool');
+      const fillTool = document.getElementById('fillTool');
+      const brushSize = document.getElementById('brushSize');
+      const brushSizeValue = document.getElementById('brushSizeValue');
+      const showGrid = document.getElementById('showGrid');
+      const undoBtn = document.getElementById('undoBtn');
+      const redoBtn = document.getElementById('redoBtn');
+      const resetViewBtn = document.getElementById('resetViewBtn');
+      const editZoomIn = document.getElementById('editZoomIn');
+      const editZoomOut = document.getElementById('editZoomOut');
+      const zoomSelect = document.getElementById('zoomSelect');
+      const zoomFit = document.getElementById('zoomFit');
+      const zoom100 = document.getElementById('zoom100');
+      const minimapCanvas = document.getElementById('minimapCanvas');
+      
+      // Back to resize panel
+      editBackBtn.onclick = () => {
+        document.getElementById('editOverlay').style.display = 'none';
+        resizeContainer.style.display = 'block';
+      };
+      
+      // Apply changes
+      editApplyBtn.onclick = () => {
+        applyEditChanges();
+        document.getElementById('editOverlay').style.display = 'none';
+        resizeContainer.style.display = 'block';
+      };
+      
+      // Tool selection
+      paintBrush.onclick = () => {
+        selectTool('paint');
+      };
+      
+      eraseTool.onclick = () => {
+        selectTool('erase');
+      };
+      
+      eyedropperTool.onclick = () => {
+        selectTool('eyedropper');
+      };
+      
+      fillTool.onclick = () => {
+        selectTool('fill');
+      };
+      
+      // Grid toggle
+      showGrid.onclick = () => {
+        editState.showGrid = !editState.showGrid;
+        showGrid.classList.toggle('active', editState.showGrid);
+        redrawCanvas();
+      };
+      
+      // Brush size
+      brushSize.oninput = () => {
+        brushSizeValue.textContent = brushSize.value;
+        updateBrushSize(parseInt(brushSize.value));
+      };
+      
+      // Undo/Redo
+      undoBtn.onclick = () => undoEdit();
+      redoBtn.onclick = () => redoEdit();
+      
+      // Reset view
+      resetViewBtn.onclick = () => resetEditView();
+      
+      // Enhanced zoom controls
+      editZoomIn.onclick = () => zoomIn();
+      editZoomOut.onclick = () => zoomOut();
+      
+      zoomSelect.onchange = () => {
+        const newZoom = parseFloat(zoomSelect.value);
+        setZoom(newZoom);
+      };
+      
+      zoomFit.onclick = () => fitToWindow();
+      zoom100.onclick = () => setZoom(1);
+      
+      // Minimap navigation
+      if (minimapCanvas) {
+        minimapCanvas.onclick = (e) => navigateToMinimapPosition(e);
+      }
+    }
+
+    const ZOOM_LEVELS = [0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32];
+
+    let editState = {
+      currentTool: 'paint',
+      currentColor: '#000000',
+      currentColorId: null,
+      brushSize: 1,
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      undoStack: [],
+      redoStack: [],
+      isDrawing: false,
+      isPanning: false,
+      showGrid: false,
+
+      mouseX: 0,
+      mouseY: 0,
+      canvasWidth: 0,
+      canvasHeight: 0,
+      updatePending: false,
+      lastPaintPos: null,
+      touchStart: null,
+      lastTouchDistance: 0,
+      lastTouchCenter: { x: 0, y: 0 }
+    };
+
+    function calculateOptimalPanelSize(imageWidth, imageHeight) {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Reserve minimal space for UI elements for almost fullscreen experience
+      const uiReserved = {
+        header: 80,
+        toolbar: 60, 
+        bottomBar: 120,
+        padding: 40
+      };
+      
+      const maxCanvasWidth = viewportWidth - uiReserved.padding;
+      const maxCanvasHeight = viewportHeight - uiReserved.header - uiReserved.toolbar - uiReserved.bottomBar - uiReserved.padding;
+      
+      // Calculate optimal initial zoom to fit image
+      const scaleX = maxCanvasWidth / imageWidth;
+      const scaleY = maxCanvasHeight / imageHeight;
+      const initialZoom = Math.min(scaleX, scaleY, 1); // Don't zoom in initially
+      
+      return {
+        panelWidth: Math.min(viewportWidth * 0.95, imageWidth * initialZoom + uiReserved.colorPanel + uiReserved.padding),
+        panelHeight: Math.min(viewportHeight * 0.95, imageHeight * initialZoom + uiReserved.toolbar + uiReserved.statusBar + uiReserved.canvasToolbar + uiReserved.padding),
+        canvasWidth: Math.min(maxCanvasWidth, imageWidth * initialZoom),
+        canvasHeight: Math.min(maxCanvasHeight, imageHeight * initialZoom),
+        initialZoom: Math.max(0.1, initialZoom)
+      };
+    }
+
+    function initializeEditPanel(imageData) {
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      
+      // Reset edit state
+      editState.zoom = 1;
+      editState.panX = 0;
+      editState.panY = 0;
+      editState.undoStack = [];
+      editState.redoStack = [];
+      editState.currentTool = 'paint';
+      editState.brushSize = 1;
+      editState.showGrid = false;
+      editState.isPanning = false;
+      editState.isDrawing = false;
+      editState.lastPaintPos = null;
+      
+      // Set canvas size to match baseCanvas
+      editCanvas.width = baseCanvas.width;
+      editCanvas.height = baseCanvas.height;
+      editState.canvasWidth = editCanvas.width;
+      editState.canvasHeight = editCanvas.height;
+      
+      // Configure canvas context for pixel art
+      ctx.imageSmoothingEnabled = false;
+      ctx.webkitImageSmoothingEnabled = false;
+      ctx.mozImageSmoothingEnabled = false;
+      ctx.msImageSmoothingEnabled = false;
+      
+      // Calculate optimal panel size
+      const panelSize = calculateOptimalPanelSize(editCanvas.width, editCanvas.height);
+      const editContainer = document.querySelector('.edit-container');
+      if (editContainer) {
+        editContainer.style.width = panelSize.panelWidth + 'px';
+        editContainer.style.height = panelSize.panelHeight + 'px';
+      }
+      
+      // Setup canvas container
+      setupCanvasContainer();
+      
+      // Load image onto canvas
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, editCanvas.width, editCanvas.height);
+        ctx.drawImage(img, 0, 0);
+        
+  // Always fit artwork to the visible area on start and center
+  fitToWindow();
+  centerCanvas();
+        
+        // Setup minimap
+        setupMinimap();
+        
+        // Save initial state for undo
+        saveEditState();
+        
+        // Set up canvas drawing events
+        setupCanvasDrawing();
+        
+        // Initialize color palette
+        initializeEditColorPalette();
+        
+        // Setup keyboard shortcuts
+        setupKeyboardShortcuts();
+        
+        // Setup touch support
+        setupTouchSupport();
+        
+        // Set initial tool
+        selectTool('paint');
+        
+        // Update status bar
+        updateStatusBar(0, 0);
+        
+        // Center canvas initially
+        centerCanvas();
+      };
+      img.src = imageData;
+    }
+
+    // mapClientToCanvas function for coordinate mapping
+    function mapClientToCanvas(clientX, clientY) {
+      const canvas = document.getElementById('editCanvas');
+      const wrapper = document.getElementById('editCanvasWrapper');
+      const container = document.getElementById('editCanvasContainer');
+      
+      if (!canvas || !wrapper || !container) return null;
+      
+      // Get the actual canvas element bounds (after CSS transform)
+      const canvasRect = canvas.getBoundingClientRect();
+      
+      // Calculate relative position within the actual canvas bounds
+      const relativeX = (clientX - canvasRect.left) / canvasRect.width * canvas.width;
+      const relativeY = (clientY - canvasRect.top) / canvasRect.height * canvas.height;
+      
+      // Convert to canvas coordinates
+      const canvasX = Math.floor(relativeX);
+      const canvasY = Math.floor(relativeY);
+      
+      // Bounds checking
+      if (canvasX < 0 || canvasX >= canvas.width || canvasY < 0 || canvasY >= canvas.height) {
+        return null;
+      }
+      
+      return { x: canvasX, y: canvasY };
+    }
+
+    function setupCanvasDrawing() {
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      
+      let isDrawing = false;
+      let isPanning = false;
+      let lastX = 0;
+      let lastY = 0;
+      let panStartX = 0;
+      let panStartY = 0;
+      
+      const getMousePos = (e) => {
+        return mapClientToCanvas(e.clientX, e.clientY);
+      };
+      
+      editCanvas.onmousedown = (e) => {
+        if (e.button === 2 || e.ctrlKey) { // Right click or Ctrl+click for panning
+          editState.isPanning = true;
+          panStartX = e.clientX - editState.panX;
+          panStartY = e.clientY - editState.panY;
+          editCanvas.style.cursor = 'move';
+          e.preventDefault();
+          return;
+        }
+        
+        const pos = getMousePos(e);
+        if (!pos) return;
+        
+        if (editState.currentTool === 'eyedropper') {
+          handleEyedropper(pos.x, pos.y);
+          return;
+        }
+        
+        if (editState.currentTool === 'fill') {
+          floodFill(pos.x, pos.y, editState.currentColor);
+          saveEditState();
+          return;
+        }
+        
+        editState.isDrawing = true;
+        editState.lastPaintPos = { x: pos.x, y: pos.y };
+        lastX = pos.x;
+        lastY = pos.y;
+        
+        paintAtPosition(pos.x, pos.y, true);
+      };
+      
+      editCanvas.onmousemove = (e) => {
+        const pos = getMousePos(e);
+        
+        if (pos) {
+          editState.mouseX = pos.x;
+          editState.mouseY = pos.y;
+          updateStatusBar(pos.x, pos.y);
+        }
+        
+        if (editState.isPanning) {
+          editState.panX = e.clientX - panStartX;
+          editState.panY = e.clientY - panStartY;
+          constrainPan();
+          updateCanvasTransform();
+          updateMinimap();
+          return;
+        }
+        
+        if (!editState.isDrawing) {
+          return;
+        }
+        
+        if (pos && editState.lastPaintPos) {
+          paintAtPosition(pos.x, pos.y, true);
+          editState.lastPaintPos = { x: pos.x, y: pos.y };
+        }
+      };
+      
+      editCanvas.onmouseup = (e) => {
+        if (editState.isPanning) {
+          editState.isPanning = false;
+          selectTool(editState.currentTool); // Restore cursor
+          return;
+        }
+        
+        if (editState.isDrawing) {
+          editState.isDrawing = false;
+          editState.lastPaintPos = null;
+          saveEditState();
+        }
+      };
+      
+      editCanvas.onmouseleave = () => {
+        if (editState.isPanning) {
+          editState.isPanning = false;
+          selectTool(editState.currentTool); // Restore cursor
+        }
+        
+        if (editState.isDrawing) {
+          editState.isDrawing = false;
+          editState.lastPaintPos = null;
+          saveEditState();
+        }
+      };
+      
+      // Prevent context menu on right click
+      editCanvas.oncontextmenu = (e) => {
+        e.preventDefault();
+        return false;
+      };
+      
+      // Enhanced zoom with mouse wheel (zoom to cursor)
+      editCanvas.onwheel = (e) => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.2 : 1/1.2;
+        zoomToPoint(editState.zoom * zoomFactor, e.clientX, e.clientY);
+      };
+    }
+
+    function paintAtPosition(x, y, isMouseDown = true) {
+      if (!isMouseDown || !editState.currentColor) return;
+      
+      const canvas = document.getElementById('editCanvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (editState.lastPaintPos && editState.currentTool === 'paint') {
+        // Draw line from last position to current position
+        drawLine(ctx, editState.lastPaintPos.x, editState.lastPaintPos.y, x, y, editState.currentTool);
+      } else {
+        // Single brush stroke
+        drawBrush(ctx, x, y, editState.currentTool);
+      }
+      
+      editState.lastPaintPos = { x, y };
+      
+      // Update minimap thumbnail
+      if (!editState.updatePending) {
+        editState.updatePending = true;
+        requestAnimationFrame(() => {
+          setupMinimap();
+          editState.updatePending = false;
+        });
+      }
+    }
+
+    function drawBrush(ctx, x, y, tool) {
+      const size = editState.brushSize;
+      const halfSize = Math.floor(size / 2);
+      
+      if (tool === 'paint') {
+        ctx.fillStyle = editState.currentColor;
+        for (let dx = 0; dx < size; dx++) {
+          for (let dy = 0; dy < size; dy++) {
+            // Center the brush at the cursor position
+            const px = x - halfSize + dx;
+            const py = y - halfSize + dy;
+            
+            if (px >= 0 && px < ctx.canvas.width && py >= 0 && py < ctx.canvas.height) {
+              ctx.fillRect(px, py, 1, 1);
+            }
+          }
+        }
+      } else if (tool === 'erase') {
+        for (let dx = 0; dx < size; dx++) {
+          for (let dy = 0; dy < size; dy++) {
+            // Center the brush at the cursor position
+            const px = x - halfSize + dx;
+            const py = y - halfSize + dy;
+            
+            if (px >= 0 && px < ctx.canvas.width && py >= 0 && py < ctx.canvas.height) {
+              ctx.clearRect(px, py, 1, 1);
+            }
+          }
+        }
+      }
+    }
+
+    function drawPixel(x, y) {
+      drawBrush(document.getElementById('editCanvas').getContext('2d'), x, y, 'paint');
+    }
+
+    function erasePixel(x, y) {
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      
+      const size = editState.brushSize;
+      const halfSize = Math.floor(size / 2);
+      
+      for (let dx = 0; dx < size; dx++) {
+        for (let dy = 0; dy < size; dy++) {
+          // Center the brush at the cursor position (consistent with drawBrush)
+          const px = x - halfSize + dx;
+          const py = y - halfSize + dy;
+          
+          if (px >= 0 && px < editCanvas.width && py >= 0 && py < editCanvas.height) {
+            ctx.clearRect(px, py, 1, 1);
+          }
+        }
+      }
+    }
+
+    function drawLine(ctx, x1, y1, x2, y2, tool) {
+      // Bresenham's line algorithm with tool support
+      const dx = Math.abs(x2 - x1);
+      const dy = Math.abs(y2 - y1);
+      const sx = x1 < x2 ? 1 : -1;
+      const sy = y1 < y2 ? 1 : -1;
+      let err = dx - dy;
+      
+      let x = x1;
+      let y = y1;
+      
+      while (true) {
+        drawBrush(ctx, x, y, tool);
+        
+        if (x === x2 && y === y2) break;
+        
+        const e2 = 2 * err;
+        if (e2 > -dy) {
+          err -= dy;
+          x += sx;
+        }
+        if (e2 < dx) {
+          err += dx;
+          y += sy;
+        }
+      }
+    }
+
+    function eraseLine(x1, y1, x2, y2) {
+      // Same as drawLine but with erase
+      const dx = Math.abs(x2 - x1);
+      const dy = Math.abs(y2 - y1);
+      const sx = x1 < x2 ? 1 : -1;
+      const sy = y1 < y2 ? 1 : -1;
+      let err = dx - dy;
+      
+      let x = x1;
+      let y = y1;
+      
+      while (true) {
+        erasePixel(x, y);
+        
+        if (x === x2 && y === y2) break;
+        
+        const e2 = 2 * err;
+        if (e2 > -dy) {
+          err -= dy;
+          x += sx;
+        }
+        if (e2 < dx) {
+          err += dx;
+          y += sy;
+        }
+      }
+    }
+
+    function selectTool(tool) {
+      editState.currentTool = tool;
+      
+      document.querySelectorAll('.edit-tool').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      const editCanvas = document.getElementById('editCanvas');
+      
+      switch(tool) {
+        case 'paint':
+          document.getElementById('paintBrush').classList.add('active');
+          editCanvas.style.cursor = 'crosshair';
+          break;
+        case 'erase':
+          document.getElementById('eraseTool').classList.add('active');
+          editCanvas.style.cursor = 'not-allowed';
+          break;
+        case 'eyedropper':
+          document.getElementById('eyedropperTool').classList.add('active');
+          editCanvas.style.cursor = 'copy';
+          break;
+        case 'fill':
+          document.getElementById('fillTool').classList.add('active');
+          editCanvas.style.cursor = 'pointer';
+          break;
+      }
+    }
+
+    function updateBrushSize(size) {
+      editState.brushSize = size;
+    }
+
+    function initializeEditColorPalette() {
+      const colorGrid = document.getElementById('editColorGrid');
+      const currentColorDisplay = document.getElementById('currentColorDisplay');
+      
+      colorGrid.innerHTML = '';
+      
+      let availableColors = [];
+      
+      // Try to get colors from state first
+      if (state && state.availableColors && state.availableColors.length > 0) {
+        availableColors = state.availableColors.map(color => ({
+          id: color.id,
+          name: color.name,
+          rgb: color.rgb,
+          hex: `#${color.rgb[0].toString(16).padStart(2,'0')}${color.rgb[1].toString(16).padStart(2,'0')}${color.rgb[2].toString(16).padStart(2,'0')}`
+        }));
+      } else {
+        // Fallback to CONFIG.COLOR_MAP
+        availableColors = Object.values(CONFIG.COLOR_MAP)
+          .filter(color => color.rgb !== null)
+          .map(color => ({
+            id: color.id,
+            name: color.name,
+            rgb: [color.rgb.r, color.rgb.g, color.rgb.b],
+            hex: `#${color.rgb.r.toString(16).padStart(2,'0')}${color.rgb.g.toString(16).padStart(2,'0')}${color.rgb.b.toString(16).padStart(2,'0')}`
+          }));
+      }
+      
+      // Fallback to basic colors if nothing available
+      if (availableColors.length === 0) {
+        availableColors = [
+          {id: 0, name: 'Black', rgb: [0,0,0], hex: '#000000'},
+          {id: 1, name: 'White', rgb: [255,255,255], hex: '#ffffff'},
+          {id: 2, name: 'Red', rgb: [255,0,0], hex: '#ff0000'},
+          {id: 3, name: 'Green', rgb: [0,255,0], hex: '#00ff00'},
+          {id: 4, name: 'Blue', rgb: [0,0,255], hex: '#0000ff'}
+        ];
+      }
+      
+      // Update color count
+      const colorCount = document.getElementById('editColorCount');
+      if (colorCount) {
+        colorCount.textContent = availableColors.length;
+      }
+      
+      availableColors.forEach(color => {
+        const colorBtn = document.createElement('button');
+        colorBtn.className = 'color-btn';
+        colorBtn.style.backgroundColor = color.hex;
+        colorBtn.title = `${color.name} (${color.hex})`;
+        colorBtn.dataset.colorId = color.id;
+        colorBtn.dataset.colorHex = color.hex;
+        
+        colorBtn.onclick = () => {
+          editState.currentColor = color.hex;
+          editState.currentColorId = color.id;
+          currentColorDisplay.style.backgroundColor = color.hex;
+          
+          // Update active color
+          document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.classList.remove('selected');
+          });
+          colorBtn.classList.add('selected');
+          
+          updateStatusBar(editState.mouseX, editState.mouseY);
+        };
+        
+        colorGrid.appendChild(colorBtn);
+      });
+      
+      // Set first color as default
+      if (availableColors.length > 0) {
+        editState.currentColor = availableColors[0].hex;
+        editState.currentColorId = availableColors[0].id;
+        currentColorDisplay.style.backgroundColor = availableColors[0].hex;
+        colorGrid.firstChild.classList.add('selected');
+      }
+    }
+
+    function saveEditState() {
+      const editCanvas = document.getElementById('editCanvas');
+      const imageData = editCanvas.toDataURL();
+      
+      editState.undoStack.push(imageData);
+      
+      // Limit undo stack size
+      if (editState.undoStack.length > 50) {
+        editState.undoStack.shift();
+      }
+      
+      // Clear redo stack when new action is performed
+      editState.redoStack = [];
+      
+      updateUndoRedoButtons();
+    }
+
+    function undoEdit() {
+      if (editState.undoStack.length <= 1) return;
+      
+      const currentState = editState.undoStack.pop();
+      editState.redoStack.push(currentState);
+      
+      const previousState = editState.undoStack[editState.undoStack.length - 1];
+      loadEditState(previousState);
+      
+      updateUndoRedoButtons();
+    }
+
+    function redoEdit() {
+      if (editState.redoStack.length === 0) return;
+      
+      const nextState = editState.redoStack.pop();
+      editState.undoStack.push(nextState);
+      
+      loadEditState(nextState);
+      
+      updateUndoRedoButtons();
+    }
+
+    function loadEditState(imageData) {
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, editCanvas.width, editCanvas.height);
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = imageData;
+    }
+
+    function updateUndoRedoButtons() {
+      const undoBtn = document.getElementById('undoBtn');
+      const redoBtn = document.getElementById('redoBtn');
+      
+      if (undoBtn) {
+        undoBtn.disabled = editState.undoStack.length <= 1;
+      }
+      
+      if (redoBtn) {
+        redoBtn.disabled = editState.redoStack.length === 0;
+      }
+    }
+
+    function updateCanvasTransform() {
+      const wrapper = document.getElementById('editCanvasWrapper');
+      if (wrapper) {
+        wrapper.style.transform = `translate(${editState.panX}px, ${editState.panY}px) scale(${editState.zoom})`;
+      }
+      
+      // Update zoom select
+      const zoomSelect = document.getElementById('zoomSelect');
+      if (zoomSelect) {
+        // If exact value exists, use it, otherwise show nearest but update displayed text
+        const exact = ZOOM_LEVELS.find(z => z === editState.zoom);
+        zoomSelect.value = exact != null ? exact : ZOOM_LEVELS.reduce((prev, curr) => Math.abs(curr - editState.zoom) < Math.abs(prev - editState.zoom) ? curr : prev);
+        // Also update status bar zoom text
+        updateStatusBar(editState.mouseX || 0, editState.mouseY || 0);
+      }
+    }
+
+    function setupCanvasContainer() {
+      const canvasContainer = document.getElementById('editCanvasContainer');
+      const editCanvas = document.getElementById('editCanvas');
+      const wrapper = document.getElementById('editCanvasWrapper');
+      
+      if (!canvasContainer || !wrapper) return;
+      
+      // Setup container styles
+      canvasContainer.style.cssText = `
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        background: 
+          linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+          linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+          linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+          linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        background-color: #ddd;
+      `;
+      
+      // Setup wrapper styles
+      wrapper.style.cssText = `
+        position: relative;
+        transform-origin: center center;
+        display: inline-block;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        border: 2px solid #333;
+        background: white;
+      `;
+    }
+
+    function zoomToPoint(newZoom, clientX, clientY) {
+      const container = document.getElementById('editCanvasContainer');
+      const wrapper = document.getElementById('editCanvasWrapper');
+      
+      if (!container || !wrapper) return;
+      
+      newZoom = Math.max(0.1, Math.min(32, newZoom));
+      
+      if (clientX !== undefined && clientY !== undefined) {
+        // Get current transform values
+        const oldZoom = editState.zoom;
+        const rect = container.getBoundingClientRect();
+        
+        // Calculate zoom center point relative to container
+        const containerCenterX = rect.left + rect.width / 2;
+        const containerCenterY = rect.top + rect.height / 2;
+        
+        // Calculate offset to keep zoom point centered
+        const offsetX = (clientX - containerCenterX) * (1 - newZoom / oldZoom);
+        const offsetY = (clientY - containerCenterY) * (1 - newZoom / oldZoom);
+        
+        editState.panX += offsetX;
+        editState.panY += offsetY;
+      }
+      
+      editState.zoom = newZoom;
+      constrainPan();
+      updateCanvasTransform();
+      updateMinimap();
+      updateStatusBar(editState.mouseX || 0, editState.mouseY || 0);
+    }
+
+    function constrainPan() {
+      const container = document.getElementById('editCanvasContainer');
+      const canvas = document.getElementById('editCanvas');
+      
+      if (!container || !canvas) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const scaledWidth = canvas.width * editState.zoom;
+      const scaledHeight = canvas.height * editState.zoom;
+      
+  // Small padding around edges to avoid snapping against borders
+  const padding = 10;
+      
+      // Calculate limits to keep canvas somewhat visible
+      const maxPanX = Math.max(0, (scaledWidth - containerRect.width) / 2 + padding);
+      const maxPanY = Math.max(0, (scaledHeight - containerRect.height) / 2 + padding);
+      
+      editState.panX = Math.max(-maxPanX, Math.min(maxPanX, editState.panX));
+      editState.panY = Math.max(-maxPanY, Math.min(maxPanY, editState.panY));
+    }
+
+    function setZoom(zoom) {
+      zoomToPoint(zoom);
+    }
+
+    function zoomIn() {
+      const currentIndex = ZOOM_LEVELS.findIndex(z => z >= editState.zoom);
+      const nextIndex = Math.min(currentIndex + 1, ZOOM_LEVELS.length - 1);
+      setZoom(ZOOM_LEVELS[nextIndex]);
+    }
+
+    function zoomOut() {
+      const currentIndex = ZOOM_LEVELS.findIndex(z => z >= editState.zoom);
+      const prevIndex = Math.max(currentIndex - 1, 0);
+      setZoom(ZOOM_LEVELS[prevIndex]);
+    }
+
+    function fitToWindow() {
+      const container = document.getElementById('editCanvasContainer');
+      const canvas = document.getElementById('editCanvas');
+      
+      if (!container || !canvas) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const padding = 40;
+      
+      const scaleX = (containerRect.width - padding) / canvas.width;
+      const scaleY = (containerRect.height - padding) / canvas.height;
+      const fitZoom = Math.max(0.1, Math.min(scaleX, scaleY));
+      
+      // Center the canvas
+      editState.zoom = fitZoom;
+      editState.panX = 0;
+      editState.panY = 0;
+      updateCanvasTransform();
+      updateMinimap();
+      updateStatusBar(editState.mouseX || 0, editState.mouseY || 0);
+    }
+
+    function centerCanvas() {
+      editState.panX = 0;
+      editState.panY = 0;
+      updateCanvasTransform();
+      updateMinimap();
+    }
+
+    function resetEditView() {
+      editState.zoom = 1;
+      editState.panX = 0;
+      editState.panY = 0;
+      
+      updateCanvasTransform();
+      updateMinimap();
+    }
+
+    function setupMinimap() {
+      const minimapCanvas = document.getElementById('minimapCanvas');
+      const editCanvas = document.getElementById('editCanvas');
+      const minimapContainer = document.getElementById('minimapContainer');
+      
+      if (!minimapCanvas || !editCanvas) return;
+      
+      // Show minimap only for larger images
+      if (editCanvas.width < 100 || editCanvas.height < 100) {
+        if (minimapContainer) minimapContainer.style.display = 'none';
+        return;
+      }
+      
+      // Calculate minimap size
+      const maxSize = 150;
+      const scale = Math.min(maxSize / editCanvas.width, maxSize / editCanvas.height);
+      
+      minimapCanvas.width = editCanvas.width * scale;
+      minimapCanvas.height = editCanvas.height * scale;
+      
+      // Draw thumbnail
+      const minimapCtx = minimapCanvas.getContext('2d');
+      minimapCtx.imageSmoothingEnabled = false;
+      minimapCtx.drawImage(editCanvas, 0, 0, minimapCanvas.width, minimapCanvas.height);
+      
+      // Update viewport indicator
+      updateMinimap();
+    }
+
+    function updateMinimap() {
+      const viewport = document.getElementById('minimapViewport');
+      const minimapCanvas = document.getElementById('minimapCanvas');
+      const container = document.getElementById('editCanvasContainer');
+      const editCanvas = document.getElementById('editCanvas');
+      
+      if (!viewport || !minimapCanvas || !container || !editCanvas) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const scale = minimapCanvas.width / editCanvas.width;
+      
+      // Calculate visible area in minimap coordinates
+      const visibleWidth = Math.min(containerRect.width / editState.zoom * scale, minimapCanvas.width);
+      const visibleHeight = Math.min(containerRect.height / editState.zoom * scale, minimapCanvas.height);
+      
+      const viewportX = (minimapCanvas.width / 2) - (editState.panX / editState.zoom * scale) - (visibleWidth / 2);
+      const viewportY = (minimapCanvas.height / 2) - (editState.panY / editState.zoom * scale) - (visibleHeight / 2);
+      
+      viewport.style.width = `${visibleWidth}px`;
+      viewport.style.height = `${visibleHeight}px`;
+      viewport.style.left = `${Math.max(0, Math.min(minimapCanvas.width - visibleWidth, viewportX))}px`;
+      viewport.style.top = `${Math.max(0, Math.min(minimapCanvas.height - visibleHeight, viewportY))}px`;
+    }
+
+    function navigateToMinimapPosition(e) {
+      const minimapCanvas = document.getElementById('minimapCanvas');
+      const editCanvas = document.getElementById('editCanvas');
+      
+      if (!minimapCanvas || !editCanvas) return;
+      
+      const rect = minimapCanvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / minimapCanvas.width;
+      const y = (e.clientY - rect.top) / minimapCanvas.height;
+      
+      // Convert to canvas coordinates and center
+      const targetX = (x - 0.5) * editCanvas.width * editState.zoom;
+      const targetY = (y - 0.5) * editCanvas.height * editState.zoom;
+      
+      editState.panX = -targetX;
+      editState.panY = -targetY;
+      
+      constrainPan();
+      updateCanvasTransform();
+      updateMinimap();
+    }
+
+    function updateStatusBar(x, y) {
+      const statusBar = document.getElementById('editStatusBar');
+      if (statusBar) {
+        const zoomPercent = Math.round(editState.zoom * 100);
+        statusBar.textContent = `Position: (${x}, ${y}) | Color: ${editState.currentColor || '#000000'} | Zoom: ${zoomPercent}%`;
+      }
+    }
+
+    function handleEyedropper(x, y) {
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      
+      if (x >= 0 && x < editCanvas.width && y >= 0 && y < editCanvas.height) {
+        const imageData = ctx.getImageData(x, y, 1, 1);
+        const [r, g, b] = imageData.data;
+        const pickedColor = `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+        
+        editState.currentColor = pickedColor;
+        const currentColorDisplay = document.getElementById('currentColorDisplay');
+        if (currentColorDisplay) {
+          currentColorDisplay.style.backgroundColor = pickedColor;
+        }
+        
+        // Try to find matching color in palette
+        document.querySelectorAll('.edit-color-btn').forEach(btn => {
+          btn.classList.remove('active');
+          if (btn.dataset.colorHex === pickedColor) {
+            btn.classList.add('active');
+            editState.currentColorId = parseInt(btn.dataset.colorId);
+          }
+        });
+        
+        updateStatusBar(x, y);
+      }
+    }
+
+    function floodFill(startX, startY, fillColor) {
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      const imageData = ctx.getImageData(0, 0, editCanvas.width, editCanvas.height);
+      const data = imageData.data;
+      
+      if (startX < 0 || startX >= editCanvas.width || startY < 0 || startY >= editCanvas.height) return;
+      
+      const startIndex = (startY * editCanvas.width + startX) * 4;
+      const startR = data[startIndex];
+      const startG = data[startIndex + 1];
+      const startB = data[startIndex + 2];
+      const startA = data[startIndex + 3];
+      
+      // Convert fill color to RGB
+      const fillR = parseInt(fillColor.slice(1, 3), 16);
+      const fillG = parseInt(fillColor.slice(3, 5), 16);
+      const fillB = parseInt(fillColor.slice(5, 7), 16);
+      
+      // Don't fill if the color is already the same
+      if (startR === fillR && startG === fillG && startB === fillB) return;
+      
+      const pixelsToCheck = [{x: startX, y: startY}];
+      const checkedPixels = new Set();
+      
+      while (pixelsToCheck.length > 0) {
+        const {x, y} = pixelsToCheck.pop();
+        const key = `${x},${y}`;
+        
+        if (checkedPixels.has(key)) continue;
+        checkedPixels.add(key);
+        
+        if (x < 0 || x >= editCanvas.width || y < 0 || y >= editCanvas.height) continue;
+        
+        const index = (y * editCanvas.width + x) * 4;
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+        const a = data[index + 3];
+        
+        if (r === startR && g === startG && b === startB && a === startA) {
+          data[index] = fillR;
+          data[index + 1] = fillG;
+          data[index + 2] = fillB;
+          data[index + 3] = 255;
+          
+          pixelsToCheck.push({x: x + 1, y});
+          pixelsToCheck.push({x: x - 1, y});
+          pixelsToCheck.push({x, y: y + 1});
+          pixelsToCheck.push({x, y: y - 1});
+        }
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // Brush preview removed per user request
+    function hideBrushPreview() {
+      // No-op - brush preview disabled
+    }
+
+    function drawGrid(ctx, width, height) {
+      if (!editState.showGrid || editState.zoom < 4) return;
+      
+      ctx.save();
+      ctx.strokeStyle = 'rgba(128, 128, 128, 0.3)';
+      ctx.lineWidth = 1 / editState.zoom;
+      
+      for (let x = 0; x <= width; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      
+      for (let y = 0; y <= height; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      
+      ctx.restore();
+    }
+
+    function redrawCanvas() {
+      if (editState.undoStack.length === 0) return;
+      
+      const currentState = editState.undoStack[editState.undoStack.length - 1];
+      const editCanvas = document.getElementById('editCanvas');
+      const ctx = editCanvas.getContext('2d');
+      
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, editCanvas.width, editCanvas.height);
+        ctx.drawImage(img, 0, 0);
+        drawGrid(ctx, editCanvas.width, editCanvas.height);
+      };
+      img.src = currentState;
+    }
+
+    function setupTouchSupport() {
+      const canvas = document.getElementById('editCanvas');
+      if (!canvas) return;
+      
+      let touchStartTime = 0;
+      
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+      canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+      
+      function handleTouchStart(e) {
+        e.preventDefault();
+        touchStartTime = Date.now();
+        
+        if (e.touches.length === 1) {
+          // Single touch - start painting
+          const touch = e.touches[0];
+          const coords = mapClientToCanvas(touch.clientX, touch.clientY);
+          if (coords) {
+            editState.isDrawing = true;
+            editState.lastPaintPos = { x: coords.x, y: coords.y };
+            paintAtPosition(coords.x, coords.y, true);
+          }
+        } else if (e.touches.length === 2) {
+          // Two finger - prepare for zoom/pan
+          const touch1 = e.touches[0];
+          const touch2 = e.touches[1];
+          
+          editState.lastTouchDistance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY
+          );
+          
+          editState.lastTouchCenter = {
+            x: (touch1.clientX + touch2.clientX) / 2,
+            y: (touch1.clientY + touch2.clientY) / 2
+          };
+        }
+      }
+      
+      function handleTouchMove(e) {
+        e.preventDefault();
+        
+        if (e.touches.length === 1 && editState.isDrawing) {
+          // Continue painting
+          const touch = e.touches[0];
+          const coords = mapClientToCanvas(touch.clientX, touch.clientY);
+          if (coords) {
+            paintAtPosition(coords.x, coords.y, true);
+          }
+        } else if (e.touches.length === 2) {
+          // Pinch zoom and pan
+          const touch1 = e.touches[0];
+          const touch2 = e.touches[1];
+          
+          const currentDistance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY
+          );
+          
+          const currentCenter = {
+            x: (touch1.clientX + touch2.clientX) / 2,
+            y: (touch1.clientY + touch2.clientY) / 2
+          };
+          
+          // Zoom based on distance change
+          if (editState.lastTouchDistance > 0) {
+            const zoomFactor = currentDistance / editState.lastTouchDistance;
+            const newZoom = Math.max(0.1, Math.min(32, editState.zoom * zoomFactor));
+            zoomToPoint(newZoom, currentCenter.x, currentCenter.y);
+          }
+          
+          // Pan based on center movement
+          editState.panX += currentCenter.x - editState.lastTouchCenter.x;
+          editState.panY += currentCenter.y - editState.lastTouchCenter.y;
+          
+          editState.lastTouchDistance = currentDistance;
+          editState.lastTouchCenter = currentCenter;
+          
+          constrainPan();
+          updateCanvasTransform();
+          updateMinimap();
+        }
+      }
+      
+      function handleTouchEnd(e) {
+        e.preventDefault();
+        
+        if (editState.isDrawing) {
+          editState.isDrawing = false;
+          editState.lastPaintPos = null;
+          saveEditState();
+        }
+        
+        if (e.touches.length === 0) {
+          editState.lastTouchDistance = 0;
+        }
+      }
+    }
+
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        // Only handle shortcuts when edit panel is visible
+        const editOverlay = document.getElementById('editOverlay');
+        if (!editOverlay || editOverlay.style.display === 'none') return;
+        
+        // Prevent default for handled keys
+        const handledKeys = ['b', 'e', 'i', 'f', 'g', 'z', '[', ']'];
+        if (handledKeys.includes(e.key.toLowerCase()) || (e.ctrlKey && e.key.toLowerCase() === 'z')) {
+          e.preventDefault();
+        }
+        
+        switch(e.key.toLowerCase()) {
+          case 'b': // Brush
+            selectTool('paint');
+            break;
+          case 'e': // Erase
+            selectTool('erase');
+            break;
+          case 'i': // Eyedropper
+            selectTool('eyedropper');
+            break;
+          case 'f': // Fill
+            selectTool('fill');
+            break;
+          case 'g': // Grid
+            const showGrid = document.getElementById('showGrid');
+            if (showGrid) showGrid.click();
+            break;
+          case 'z':
+            if (e.ctrlKey || e.metaKey) {
+              if (e.shiftKey) {
+                redoEdit();
+              } else {
+                undoEdit();
+              }
+            }
+            break;
+          case '=':
+          case '+':
+            if (e.ctrlKey || e.metaKey) {
+              zoomIn();
+            }
+            break;
+          case '-':
+            if (e.ctrlKey || e.metaKey) {
+              zoomOut();
+            }
+            break;
+          case '0':
+            if (e.ctrlKey || e.metaKey) {
+              fitToWindow();
+            }
+            break;
+          case '1':
+            if (e.ctrlKey || e.metaKey) {
+              setZoom(1);
+            }
+            break;
+          case '[': // Decrease brush size
+            const brushSize = document.getElementById('brushSize');
+            const currentSize = parseInt(brushSize.value);
+            if (currentSize > 1) {
+              brushSize.value = currentSize - 1;
+              document.getElementById('brushSizeValue').textContent = currentSize - 1;
+              updateBrushSize(currentSize - 1);
+            }
+            break;
+          case ']': // Increase brush size
+            const brushSize2 = document.getElementById('brushSize');
+            const currentSize2 = parseInt(brushSize2.value);
+            if (currentSize2 < 20) {
+              brushSize2.value = currentSize2 + 1;
+              document.getElementById('brushSizeValue').textContent = currentSize2 + 1;
+              updateBrushSize(currentSize2 + 1);
+            }
+            break;
+        }
+      });
+    }
+
+    function applyEditChanges() {
+      try {
+        const editCanvas = document.getElementById('editCanvas');
+        if (!editCanvas) {
+          throw new Error('Edit canvas not found');
+        }
+        
+        // Find the resize canvas in the resize panel
+        const resizeCanvas = document.getElementById('resizeCanvas');
+        if (!resizeCanvas) {
+          throw new Error('Resize canvas not found');
+        }
+        
+        const baseCtx = resizeCanvas.getContext('2d');
+        if (!baseCtx) {
+          throw new Error('Resize canvas context not available');
+        }
+        
+        // Make sure the resize canvas has the same dimensions as the edit canvas
+        if (resizeCanvas.width !== editCanvas.width || resizeCanvas.height !== editCanvas.height) {
+          resizeCanvas.width = editCanvas.width;
+          resizeCanvas.height = editCanvas.height;
+        }
+        
+        // Clear resize canvas
+        baseCtx.clearRect(0, 0, resizeCanvas.width, resizeCanvas.height);
+        
+        // Copy edited image to resize canvas
+        baseCtx.imageSmoothingEnabled = false;
+        baseCtx.drawImage(editCanvas, 0, 0);
+        
+        // CRITICAL: Completely replace the template system with edited artwork
+        const editedImageData = editCanvas.toDataURL();
+        
+        // Create new processor with edited image as the template
+        if (window.WPlaceImageProcessor) {
+          const newProcessor = new window.WPlaceImageProcessor(editedImageData);
+          newProcessor.load().then(() => {
+            // Get the processed pixel data from the edited canvas
+            const editCtx = editCanvas.getContext('2d');
+            const editImageData = editCtx.getImageData(0, 0, editCanvas.width, editCanvas.height);
+            const pixels = editImageData.data;
+            
+            // Count valid pixels in the edited image
+            let totalValidPixels = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              const a = pixels[i + 3];
+              const r = pixels[i];
+              const g = pixels[i + 1];
+              const b = pixels[i + 2];
+              
+              const isTransparent = !state.paintTransparentPixels && a < state.customTransparencyThreshold;
+              const isWhiteAndSkipped = !state.paintWhitePixels && Utils.isWhitePixel(r, g, b);
+              
+              if (!isTransparent && !isWhiteAndSkipped) {
+                totalValidPixels++;
+              }
+            }
+            
+            // COMPLETELY REBUILD state.imageData with the edited artwork
+            state.imageData = {
+              width: editCanvas.width,
+              height: editCanvas.height, 
+              pixels: pixels,
+              totalPixels: totalValidPixels,
+              processor: newProcessor,
+            };
+            
+            // CRITICAL: Update state.originalImage so resize panel uses edited artwork as base template
+            state.originalImage = {
+              dataUrl: editedImageData,
+              width: editCanvas.width,
+              height: editCanvas.height
+            };
+            
+            // Update state with new totals
+            state.totalPixels = totalValidPixels;
+            state.paintedPixels = 0; // Reset progress since this is a new template
+            state.imageLoaded = true;
+            
+            // Update local processors
+            if (typeof processor !== 'undefined') {
+              processor = newProcessor;
+              console.log('🔄 Updated local processor with edited artwork');
+            }
+            if (typeof baseProcessor !== 'undefined') {
+              baseProcessor = newProcessor;
+              console.log('🔄 Updated baseProcessor with edited artwork');  
+            }
+            
+            // Force regeneration of overlays by clearing cached mask data
+            if (typeof window._maskImageData !== 'undefined') {
+              delete window._maskImageData;
+            }
+            
+            // Update UI to reflect the new template
+            if (typeof updateUI === 'function') {
+              updateUI();
+            }
+            
+            // Show loading and properly reload resize panel with new template
+            Utils.showAlert('Updating template... Please wait.', 'info');
+            
+            // Give more time for template to fully update and force resize panel reload
+            setTimeout(() => {
+              // Hide edit overlay first
+              document.getElementById('editOverlay').style.display = 'none';
+              
+              // Completely reload resize dialog with updated processor
+              setTimeout(() => {
+                // Clean up existing dialog
+                if (typeof _resizeDialogCleanup === 'function') {
+                  _resizeDialogCleanup();
+                }
+                
+                // Force complete reload of resize dialog with new processor
+                setTimeout(() => {
+                  showResizeDialog(newProcessor);
+                  
+                  console.log('✅ Template COMPLETELY replaced with edited artwork');
+                  console.log(`📊 New template stats: ${editCanvas.width}x${editCanvas.height}, ${totalValidPixels} pixels`);
+                  Utils.showAlert('Template successfully replaced with your edited artwork!', 'success');
+                }, 100);
+              }, 300);
+            }, 100);
+          }).catch((error) => {
+            console.error('Failed to load new processor:', error);
+            Utils.showAlert('Failed to update template. Please try again.', 'error');
+          });
+        } else {
+          console.error('WPlaceImageProcessor not available');
+          Utils.showAlert('Image processor not available. Please reload the page.', 'error');
+        }
+        
+        console.log('✅ Edit changes applied - template replacement in progress');
+      } catch (error) {
+        console.error('Error applying edit changes:', error);
+        Utils.showAlert('Failed to apply changes. Please try again.', 'error');
+      }
     }
 
     if (uploadBtn) {
@@ -5726,12 +7343,12 @@ function getText(key, params) {
           state.totalPixels = totalValidPixels;
           state.paintedPixels = 0;
           state.imageLoaded = true;
-          
+
           // Reset session-specific flags when a new image is loaded
           state.preFilteringDone = false;
           state.progressResetDone = false;
           console.log('🔄 Reset session flags for new image load');
-          
+
           // Keep existing lastPosition to continue from where we left off
           // state.lastPosition = { x: 0, y: 0 }; // REMOVED: Don't reset position
 
@@ -5780,7 +7397,7 @@ function getText(key, params) {
         try {
           updateUI('loadingImage', 'default');
           const fileData = await Utils.loadExtractedFileData();
-          
+
           if (!fileData) {
             updateUI('ready', 'default');
             return;
@@ -5797,53 +7414,53 @@ function getText(key, params) {
             stateType: typeof fileData.state,
             imageDataType: typeof fileData.imageData
           });
-          
+
           // Validate the data structure before restoring
           if (!fileData || typeof fileData !== 'object') {
             throw new Error('Invalid file format: File data is not a valid object');
           }
-          
+
           if (!fileData.state || typeof fileData.state !== 'object') {
             console.error('❌ State validation failed. FileData:', fileData);
             throw new Error('Invalid file format: Missing or invalid state object. Please ensure you exported from Art-Extractor correctly.');
           }
-          
+
           if (!fileData.imageData || typeof fileData.imageData !== 'object') {
             console.error('❌ ImageData validation failed. FileData:', fileData);
             throw new Error('Invalid file format: Missing or invalid imageData object. Please ensure you completed the area scan in Art-Extractor.');
           }
-          
+
           if (!fileData.imageData.pixels || !Array.isArray(fileData.imageData.pixels) || fileData.imageData.pixels.length === 0) {
             console.error('❌ Pixel data validation failed. ImageData:', fileData.imageData);
             throw new Error('Invalid file format: No pixel data found. Please scan an area in Art-Extractor before exporting.');
           }
-          
+
           // Ensure critical fields are present for Art-Extractor compatibility
           if (!fileData.state.availableColors) {
             console.warn('⚠️ No availableColors in file, using defaults');
             fileData.state.availableColors = [];
           }
-          
+
           // Use the existing restoreProgress function but with special handling
           const restoreSuccess = await Utils.restoreProgress(fileData);
-          
+
           if (!restoreSuccess) {
             throw new Error('Failed to restore progress data');
           }
-          
+
           // After loading, we need to enter position selection mode like when uploading images
           if (state.imageLoaded) {
             console.log('🎯 Extracted artwork loaded, entering position selection mode...');
-            
+
             // Clear position data since Art-Extractor exports may have null positions for manual placement
             state.startPosition = null;
             state.region = null;
             state.selectingPosition = true;
-            
+
             // For extracted files, force enable all necessary flags for full functionality
             state.colorsChecked = true;
             state.imageLoaded = true;
-            
+
             // Ensure image processor is available for extracted files
             if (state.imageData && !state.imageData.processor) {
               try {
@@ -5852,7 +7469,7 @@ function getText(key, params) {
                 canvas.width = state.imageData.width;
                 canvas.height = state.imageData.height;
                 const ctx = canvas.getContext('2d');
-                
+
                 // Create image data from pixels
                 const imageData = new ImageData(
                   new Uint8ClampedArray(state.imageData.pixels),
@@ -5860,11 +7477,11 @@ function getText(key, params) {
                   state.imageData.height
                 );
                 ctx.putImageData(imageData, 0, 0);
-                
+
                 // Create processor with canvas data URL using the correct class
                 const dataUrl = canvas.toDataURL();
                 state.imageData.processor = new window.WPlaceImageProcessor(dataUrl);
-                
+
                 // CRITICAL: Load the processor before using it
                 await state.imageData.processor.load();
                 console.log('🔧 Created and loaded WPlaceImageProcessor for extracted artwork');
@@ -5877,9 +7494,9 @@ function getText(key, params) {
                 }
               }
             }
-            
+
             console.log('🎨 Force-enabled all flags for extracted JSON to access resize panel');
-            
+
             // For extracted images, ensure overlay is enabled but don't set position yet
             try {
               if (overlayManager && state.imageData) {
@@ -5887,13 +7504,13 @@ function getText(key, params) {
                 const canvas = new OffscreenCanvas(state.imageData.width, state.imageData.height);
                 const ctx = canvas.getContext('2d');
                 const imageData = new ImageData(
-                  new Uint8ClampedArray(state.imageData.pixels), 
-                  state.imageData.width, 
+                  new Uint8ClampedArray(state.imageData.pixels),
+                  state.imageData.width,
                   state.imageData.height
                 );
                 ctx.putImageData(imageData, 0, 0);
                 const imageBitmap = await canvas.transferToImageBitmap();
-                
+
                 await overlayManager.setImage(imageBitmap);
                 overlayManager.enable();
                 console.log('✅ Overlay enabled for extracted artwork');
@@ -5901,26 +7518,26 @@ function getText(key, params) {
             } catch (overlayError) {
               console.warn('⚠️ Could not set overlay for extracted artwork:', overlayError);
             }
-            
+
             // For extracted images, don't try to set overlay position until user selects one
             // The overlay should already be enabled from the restoreProgress function
-            
+
             // Update UI with custom message for extracted artwork
             Utils.showAlert('🎨 Extracted artwork loaded! Please click on the canvas to select where to place it.', 'info');
             updateUI('ready', 'default'); // Use 'ready' instead of 'waitingPosition' to avoid translation issues
-            
+
             // Enable relevant buttons
             selectPosBtn.disabled = false;
             // Always enable resize button for extracted files since they have image processor
             resizeBtn.disabled = false;
             console.log('🔧 Resize button enabled for extracted artwork');
-            
+
             // Enable move artwork button (will be fully enabled after position is set)
             const moveArtworkBtn = document.getElementById('moveArtworkBtn');
             if (moveArtworkBtn) {
               moveArtworkBtn.disabled = false;
             }
-            
+
             // Set up position selection like the regular selectPosBtn
             const tempFetch = async (url, options) => {
               if (
@@ -5948,9 +7565,9 @@ function getText(key, params) {
                   state.region = { x: tileX, y: tileY };
                   state.selectingPosition = false;
 
-                  console.log('🎯 Position selected for extracted artwork:', { 
-                    startPosition: state.startPosition, 
-                    region: state.region 
+                  console.log('🎯 Position selected for extracted artwork:', {
+                    startPosition: state.startPosition,
+                    region: state.region
                   });
 
                   // Restore original fetch
@@ -5970,13 +7587,13 @@ function getText(key, params) {
 
                   startBtn.disabled = false;
                   selectPosBtn.textContent = Utils.t('selectPosition');
-                  
+
                   // Enable Move Artwork button when position is set
                   const moveArtworkBtn = document.getElementById('moveArtworkBtn');
                   if (moveArtworkBtn) {
                     moveArtworkBtn.disabled = false;
                   }
-                  
+
                   updateUI('ready', 'success');
                   Utils.showAlert('Position selected! Ready to start painting.', 'success');
                 }
@@ -5990,7 +7607,7 @@ function getText(key, params) {
             }
             window.fetch = tempFetch;
           }
-          
+
         } catch (error) {
           console.error('❌ Failed to load extracted artwork:', error);
           Utils.showAlert(`Failed to load extracted artwork: ${error.message}`, 'error');
@@ -6007,7 +7624,7 @@ function getText(key, params) {
           colorsChecked: state.colorsChecked,
           hasAvailableColors: !!(state.availableColors && state.availableColors.length > 0)
         });
-        
+
         if (state.imageLoaded && state.imageData && state.imageData.processor) {
           showResizeDialog(state.imageData.processor);
         } else {
@@ -6041,7 +7658,7 @@ function getText(key, params) {
         state.startPosition = null;
         state.region = null;
         startBtn.disabled = true;
-        
+
         // Disable Move Artwork button when selecting new position
         const moveArtworkBtn = document.getElementById('moveArtworkBtn');
         if (moveArtworkBtn) {
@@ -6094,7 +7711,7 @@ function getText(key, params) {
 
                   if (state.imageLoaded) {
                     startBtn.disabled = false;
-                    
+
                     // Enable Move Artwork button when position is set
                     const moveArtworkBtn = document.getElementById('moveArtworkBtn');
                     if (moveArtworkBtn) {
@@ -6149,7 +7766,7 @@ function getText(key, params) {
 
       // Only reset painted pixels on first start of session (when pre-filtering hasn't been done)
       if (!state.preFilteringDone) {
-        
+
         // Perform progressive pixel detection from top-left to bottom-right
         console.log('🔍 Starting progressive pixel detection from top-left to bottom-right...');
         await performProgressivePixelDetection();
@@ -6275,15 +7892,15 @@ function getText(key, params) {
         skipCooldownBtn.addEventListener('click', () => {
           if (state.preciseCurrentCharges < state.cooldownChargeThreshold) {
             console.log(`[Auto-Image] Skip cooldown requested - resetting to account index 0`);
-            
+
             // Reset to account index 0 (start new cycle)
             state.currentActiveIndex = 0;
             console.log(`🔄 Reset currentActiveIndex to 0 for new cycle`);
-            
+
             // Reset charges to threshold to bypass cooldown
             state.preciseCurrentCharges = state.cooldownChargeThreshold;
             console.log(`[Auto-Image] Cooldown skipped! Charges set to threshold: ${state.cooldownChargeThreshold}`);
-            
+
             // Switch to first account if we have multiple accounts
             if (accountManager.getAccountCount() > 1) {
               const firstAccountInfo = accountManager.getAccountByIndex(0);
@@ -6365,8 +7982,8 @@ function getText(key, params) {
     if (skipCooldownBtn) {
       const isInCooldown = state.preciseCurrentCharges < threshold && remainingMs > 0;
       skipCooldownBtn.disabled = !isInCooldown;
-      skipCooldownBtn.title = isInCooldown 
-        ? `Skip cooldown (${timeText} remaining)` 
+      skipCooldownBtn.title = isInCooldown
+        ? `Skip cooldown (${timeText} remaining)`
         : 'Skip cooldown (only available during cooldown)';
     }
   }
@@ -6384,30 +8001,30 @@ function getText(key, params) {
     const startY = state.startPosition.y;
     const regionX = state.region.x;
     const regionY = state.region.y;
-    
+
     let detectedPixels = 0;
     let totalChecked = 0;
-    
-    console.log(`🚀 Fast scanning ${width}x${height} image from top-left (0,0) to bottom-right (${width-1},${height-1})...`);
-    
+
+    console.log(`🚀 Fast scanning ${width}x${height} image from top-left (0,0) to bottom-right (${width - 1},${height - 1})...`);
+
     updateUI('pixelDetection', 'info', { message: 'Fast detecting already painted pixels...' });
-    
+
     // Calculate affected tiles
     const worldX1 = startX;
     const worldY1 = startY;
     const worldX2 = startX + width - 1;
     const worldY2 = startY + height - 1;
-    
+
     const startTileX = Math.floor(worldX1 / 1000);
     const startTileY = Math.floor(worldY1 / 1000);
     const endTileX = Math.floor(worldX2 / 1000);
     const endTileY = Math.floor(worldY2 / 1000);
-    
+
     console.log(`📄 Processing tiles from (${startTileX},${startTileY}) to (${endTileX},${endTileY})`);
-    
+
     // Cache for downloaded tile data
     const tileDataCache = new Map();
-    
+
     // Download and cache all required tiles in parallel
     const tilePromises = [];
     for (let tileY = startTileY; tileY <= endTileY; tileY++) {
@@ -6415,7 +8032,7 @@ function getText(key, params) {
         const absoluteTileX = regionX + tileX;
         const absoluteTileY = regionY + tileY;
         const tileKey = `${absoluteTileX},${absoluteTileY}`;
-        
+
         tilePromises.push(
           downloadTileImageData(absoluteTileX, absoluteTileY).then(imageData => {
             if (imageData) {
@@ -6427,22 +8044,22 @@ function getText(key, params) {
         );
       }
     }
-    
+
     // Wait for all tiles to download
     await Promise.all(tilePromises);
     console.log(`📦 Downloaded ${tileDataCache.size} tiles for fast pixel checking`);
-    
+
     // Fast pixel detection using cached tile data
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         totalChecked++;
-        
+
         // Check if pixel is eligible for painting
         const targetPixelInfo = checkPixelEligibility(x, y);
         if (!targetPixelInfo.eligible) {
           continue; // Skip non-eligible pixels
         }
-        
+
         // Calculate absolute world coordinates
         const absX = startX + x;
         const absY = startY + y;
@@ -6452,24 +8069,24 @@ function getText(key, params) {
         const pixelY = absY % 1000;
         const absoluteTileX = regionX + adderX;
         const absoluteTileY = regionY + adderY;
-        
+
         // Check if already marked as painted in local map
         if (Utils.isPixelPainted(x, y, absoluteTileX, absoluteTileY)) {
           detectedPixels++;
           continue;
         }
-        
+
         // Fast pixel color check using cached tile data
         const tileKey = `${absoluteTileX},${absoluteTileY}`;
         const tileImageData = tileDataCache.get(tileKey);
-        
+
         if (tileImageData) {
           try {
             // Direct array access - much faster than canvas operations
             const tileWidth = tileImageData.width;
             const tileHeight = tileImageData.height;
             const data = tileImageData.data;
-            
+
             // Ensure pixel coordinates are within tile bounds
             if (pixelX >= 0 && pixelX < tileWidth && pixelY >= 0 && pixelY < tileHeight) {
               const pixelIndex = (pixelY * tileWidth + pixelX) * 4;
@@ -6477,7 +8094,7 @@ function getText(key, params) {
               const g = data[pixelIndex + 1];
               const b = data[pixelIndex + 2];
               const a = data[pixelIndex + 3];
-              
+
               // Check alpha threshold
               const alphaThresh = state.customTransparencyThreshold || CONFIG.TRANSPARENCY_THRESHOLD;
               if (a >= alphaThresh) {
@@ -6487,7 +8104,7 @@ function getText(key, params) {
                   !state.paintUnavailablePixels
                 );
                 const isAlreadyPainted = existingMappedColor.id === targetPixelInfo.mappedColorId;
-                
+
                 if (isAlreadyPainted) {
                   // Check if pixel is already marked as painted to avoid double counting
                   if (!Utils.isPixelPainted(x, y, absoluteTileX, absoluteTileY)) {
@@ -6507,33 +8124,33 @@ function getText(key, params) {
             console.warn(`⚠️ Could not check pixel (${x}, ${y}):`, e.message);
           }
         }
-        
+
         // Update progress periodically
         if (totalChecked % 2500 === 0) {
           const progress = Math.round((totalChecked / (width * height)) * 100);
-          updateUI('pixelDetection', 'info', { 
-            message: `Fast detecting... ${progress}% (Found: ${detectedPixels})` 
+          updateUI('pixelDetection', 'info', {
+            message: `Fast detecting... ${progress}% (Found: ${detectedPixels})`
           });
           // Yield control briefly to prevent UI blocking
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
     }
-    
+
     const processingTime = Math.round(performance.now() - startTime);
     console.log(`🏁 Fast pixel detection complete in ${processingTime}ms:`);
     console.log(`  - Total pixels checked: ${totalChecked}`);
     console.log(`  - Already painted pixels found: ${detectedPixels}`);
     console.log(`  - Updated progress: ${state.paintedPixels}/${state.totalPixels}`);
     console.log(`  - Performance: ${Math.round(totalChecked / (processingTime / 1000))} pixels/second`);
-    
+
     // Update progress display
     await updateStats();
-    updateUI('pixelDetectionComplete', 'success', { 
-      message: `Found ${detectedPixels} already painted pixels in ${processingTime}ms` 
+    updateUI('pixelDetectionComplete', 'success', {
+      message: `Found ${detectedPixels} already painted pixels in ${processingTime}ms`
     });
   }
-  
+
   // Fast tile download and ImageData extraction (similar to Art-Extractor approach)
   async function downloadTileImageData(tileX, tileY) {
     try {
@@ -6542,7 +8159,7 @@ function getText(key, params) {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
+
       const blob = await response.blob();
       return await processTileBlob(blob);
     } catch (error) {
@@ -6550,14 +8167,14 @@ function getText(key, params) {
       return null;
     }
   }
-  
+
   // Process tile blob into ImageData (adapted from Art-Extractor)
   async function processTileBlob(blob) {
     try {
       const img = new Image();
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      
+
       return new Promise((resolve, reject) => {
         img.onload = () => {
           canvas.width = img.width;
@@ -6763,10 +8380,16 @@ function getText(key, params) {
       const actuallyPaintedCount = pixelBatch.pixels.length;
       state.paintedPixels += actuallyPaintedCount;
       console.log(`📊 Added ${actuallyPaintedCount} painted pixels to progress (total: ${state.paintedPixels})`);
-      
+
       pixelBatch.pixels.forEach((p) => {
         Utils.markPixelPainted(p.x, p.y, pixelBatch.regionX, pixelBatch.regionY);
       });
+
+      // Update last painted position to the last pixel in the successful batch
+      if (pixelBatch.pixels.length > 0) {
+        const lastPixel = pixelBatch.pixels[pixelBatch.pixels.length - 1];
+        state.lastPaintedPosition = { x: lastPixel.x, y: lastPixel.y };
+      }
 
       // IMPORTANT: Decrement charges locally to match Acc-Switch.js behavior
       state.displayCharges = Math.max(0, state.displayCharges - batchSize);
@@ -6817,6 +8440,23 @@ function getText(key, params) {
         }
 
         if (paintingResult === 'charges_depleted') {
+          if (CONFIG.autoBuyToggle && CONFIG.autoBuy != buyTypes[0]) {
+            console.log('Trying to buy more charges before stopping');
+            const purchaseResult = await purchase(CONFIG.autoBuy);
+            if (purchaseResult == 2) {
+              console.log('✅ Purchase successful, continuing painting');
+              await updateStats();
+              await updateCurrentAccountInList();
+              continue;
+            }
+            else if (purchaseResult == 1) {
+              console.log('😭 Not enough droplets to buy more charges, swapping account.');
+            }
+            else {
+              console.log('🤔 Purchase failed.');
+            }
+          }
+          else console.log('🤫 Auto buy is disabled, wait for cooldown or swapping account.');
           if (!CONFIG.autoSwap) {
             // Original workflow: cooldown period
             console.log('⏱️ Phase 2: Entering cooldown period (auto-swap disabled)');
@@ -6864,6 +8504,10 @@ function getText(key, params) {
               console.log(`🔍 Is last account? ${isLastAccount} (index ${accountManager.currentIndex} of ${totalAccounts})`);
 
               if (!isLastAccount && totalAccounts > 1) {
+                // Update current account status before switching
+                console.log('📊 Updating current account status before switch...');
+                await updateCurrentAccountInList();
+                
                 // Switch to next account immediately (no cooldown) - only if we have multiple accounts
                 const nextAccount = accountManager.getNextAccount();
                 console.log(`🔄 Switching to next account: ${nextAccount?.displayName} (${accountManager.currentIndex + 2}/${totalAccounts})`);
@@ -6896,7 +8540,7 @@ function getText(key, params) {
 
                 const firstAccountInfo = accountManager.getAccountByIndex(0);
                 const firstAccountToken = firstAccountInfo?.token;
-                
+
                 if (!firstAccountToken) {
                   console.log('❌ First account token not found, stopping');
                   state.stopFlag = true;
@@ -6905,7 +8549,7 @@ function getText(key, params) {
 
                 // Reset to first position
                 accountManager.setCurrentIndex(0);
-                
+
                 const switchResult = await switchToSpecificAccount(firstAccountToken, firstAccountInfo.displayName);
                 if (!switchResult) {
                   console.log('❌ Switch to ID 1 failed, stopping');
@@ -6999,7 +8643,7 @@ function getText(key, params) {
       if (state.lastPosition.x > 0 || state.lastPosition.y > 0) {
         const startingCoordIndex = allCoords.findIndex(([x, y]) => x === state.lastPosition.x && y === state.lastPosition.y);
         skippedCoordinates = startingCoordIndex >= 0 ? startingCoordIndex : 0;
-        
+
         if (skippedCoordinates > 0) {
           // Set progress to exactly match skipped coordinates
           state.paintedPixels = skippedCoordinates;
@@ -7109,7 +8753,7 @@ function getText(key, params) {
           let absY = startY + y;
           let adderX = Math.floor(absX / 1000);
           let adderY = Math.floor(absY / 1000);
-          
+
           if (!Utils.isPixelPainted(x, y, regionX + adderX, regionY + adderY)) {
             eligibleCoords.push([x, y, targetPixelInfo]);
           }
@@ -7125,8 +8769,11 @@ function getText(key, params) {
           }
           state.lastPosition = { x, y };
           // Show paused coordinates in UI with proper translation template
-          updateUI('paintingPaused', 'warning', { x: x, y: y });
-          console.log(`� Painting paused at coordinates (${x}, ${y})`);
+          // Use last painted position if available, otherwise use current position
+          const pausedX = state.lastPaintedPosition.x || x;
+          const pausedY = state.lastPaintedPosition.y || y;
+          updateUI('paintingPaused', 'warning', { x: pausedX, y: pausedY });
+          console.log(`⏸️ Painting paused after last painted coordinates (${pausedX}, ${pausedY})`);
           return 'stopped';
         }
 
@@ -7180,7 +8827,7 @@ function getText(key, params) {
               !state.paintUnavailablePixels
             );
             const isAlreadyCorrect = existingMappedColor.id === targetPixelInfo.mappedColorId;
-            
+
             if (isAlreadyCorrect) {
               console.log(`✅ Pixel at (${x}, ${y}) already has correct color (${existingMappedColor.id}) - marking as painted`);
               // Mark it as painted in local map but DO NOT increment progress counter
@@ -8126,12 +9773,14 @@ function getText(key, params) {
       const { droplets: newDroplets } = await WPlaceService.getCharges();
       if (droplets != newDroplets) {
         console.log("Successfully bought", amounts * chargeMultiplier, type.replace('_', ' '), ".");
-      }
-      else {
+        return 2;
+      } else {
         console.log("Failed to buy charges");
+        return 1;
       }
     } catch (e) {
       console.error("An error occurred during the purchase:", e);
+      return 0;
     }
   }
   async function swapAccountTrigger(token) {
@@ -8168,26 +9817,27 @@ function getText(key, params) {
   async function getAccounts() {
     return new Promise((resolve, reject) => {
       console.log("Requesting accounts from extension...");
-      
+
       // Set timeout for extension response
       const timeout = setTimeout(() => {
         window.removeEventListener("message", handler);
         reject(new Error("Extension response timeout"));
-      }, 5000); // 5 second timeout
-      
+      }, 15000); // 15 second timeout (increased from 5 seconds)
+
       // Ask extension for accounts
       window.postMessage({
         source: "my-userscript",
         type: "getAccounts"
       }, "*");
-      
+
       function handler(event) {
         if (event.source !== window) return;
         if (event.data.source !== "extension") return;
         if (event.data.type === "accountsData") {
+          // Clear timeout and remove listener when we get the response
           clearTimeout(timeout);
           window.removeEventListener("message", handler);
-          // Save to localStorage
+          
           try {
             localStorage.setItem("accounts", JSON.stringify(event.data.accounts));
             console.log("✅ Accounts saved to localStorage:", event.data.accounts);
@@ -8237,70 +9887,70 @@ function getText(key, params) {
         console.warn(`⚠️ [FETCH] Failed to get accounts from extension:`, error);
         // Continue anyway in case we have cached accounts
       }
-      
+
       // Load accounts using the new AccountManager
       await accountManager.loadAccounts();
-      
+
       console.log(`✅ [FETCH] Loaded ${accountManager.getAccountCount()} accounts from storage`);
-      
+
       // Debug: Check if we actually have accounts
       if (accountManager.getAccountCount() === 0) {
         console.warn(`⚠️ [FETCH] No accounts found in storage. Check localStorage 'accounts' and chrome.storage 'infoAccounts'`);
-        
+
         // Check localStorage for accounts
         const localStorageAccounts = JSON.parse(localStorage.getItem("accounts")) || [];
         console.log(`📋 [DEBUG] localStorage accounts:`, localStorageAccounts);
-        
+
         // Render empty state and return early
         renderAccountsList();
         return;
       }
-      
+
       // Now fetch fresh data for each account
       const accounts = accountManager.getAllAccounts();
       if (accounts.length > 0) {
         console.log(`🔄 [FETCH] Fetching fresh data for ${accounts.length} accounts...`);
-        
+
         // Remember the current account so we can switch back
         const originalCurrentAccount = accounts.find(acc => acc.isCurrent);
-        
+
         for (let i = 0; i < accounts.length; i++) {
           const account = accounts[i];
           console.log(`📊 [FETCH] Fetching data for account ${i + 1}: ${account.displayName}`);
-          
+
           try {
             // Switch to this account temporarily to fetch its data
             console.log(`🔄 [FETCH] Switching to ${account.displayName} to fetch fresh data...`);
             await switchToSpecificAccount(account.token, account.displayName);
             await Utils.sleep(500); // Small delay to ensure switch takes effect
-            
+
             // Fetch fresh account details
             const accountData = await WPlaceService.getCharges();
             const accountInfo = await WPlaceService.fetchCheck();
-            
+
             // Update account with fresh data
             accountManager.updateAccountData(account.token, {
               ID: accountData.id || accountInfo.ID,
               Charges: Math.floor(accountData.charges || 0),
-              Max: Math.floor(accountData.max || 0), 
+              Max: Math.floor(accountData.max || 0),
               Droplets: Math.floor(accountData.droplets || 0),
               displayName: accountInfo.Username || accountInfo.name || account.displayName
             });
-            
+
             console.log(`✅ [FETCH] Updated ${account.displayName}: ⚡${Math.floor(accountData.charges)}/${Math.floor(accountData.max)} 💧${Math.floor(accountData.droplets)}`);
-            
+
           } catch (error) {
             console.warn(`⚠️ [FETCH] Failed to fetch data for ${account.displayName}:`, error);
           }
         }
-        
+
         // Switch back to the original current account if there was one
         if (originalCurrentAccount) {
           console.log(`🔙 [FETCH] Switching back to original current account: ${originalCurrentAccount.displayName}`);
           try {
             await switchToSpecificAccount(originalCurrentAccount.token, originalCurrentAccount.displayName);
             await Utils.sleep(300);
-            
+
             // Mark it as current again
             accountManager.updateAccountData(originalCurrentAccount.token, {
               isCurrent: true
@@ -8309,13 +9959,13 @@ function getText(key, params) {
             console.warn(`⚠️ [FETCH] Failed to switch back to original account:`, error);
           }
         }
-        
+
         console.log(`🎯 [FETCH] Completed fetching fresh data for all accounts`);
       }
-      
+
       // Render the accounts list with fresh data
       renderAccountsList();
-      
+
     } catch (error) {
       console.error('❌ [FETCH] Error fetching account details:', error);
       if (accountsListArea) {
@@ -8337,17 +9987,18 @@ function getText(key, params) {
     // Find current account in the list and update its charges
     const currentAccount = accountManager.getCurrentAccount();
     if (currentAccount) {
-      const { charges, cooldown } = await WPlaceService.getCharges();
+      const { charges, cooldown, droplets } = await WPlaceService.getCharges();
       state.displayCharges = Math.floor(charges);
       state.preciseCurrentCharges = charges;
       await updateStats();
-      
+
       // Update the current account data in AccountManager
       accountManager.updateAccountData(currentAccount.token, {
         Charges: Math.floor(state.displayCharges || state.preciseCurrentCharges || 0),
-        Max: state.maxCharges
+        Max: state.maxCharges,
+        Droplets: Math.floor(droplets)
       });
-      
+
       // Re-render the account list to show updated charges
       renderAccountsList();
     }
@@ -8361,14 +10012,14 @@ function getText(key, params) {
       const currentAccountData = await WPlaceService.getCharges();
       console.log("Current account after switch:", currentAccountData);
       console.log(`🔍 Switched to account with ID: ${currentAccountData.id}`);
-      
+
       // Find the current account in AccountManager and update it
       const accounts = accountManager.getAllAccounts();
       const currentAccount = accounts.find(acc => acc.ID === currentAccountData.id);
-      
+
       if (currentAccount) {
         const currentAccountInfo = await WPlaceService.fetchCheck();
-        
+
         // Update account data in AccountManager
         accountManager.updateAccountData(currentAccount.token, {
           isCurrent: true,
@@ -8377,29 +10028,50 @@ function getText(key, params) {
           Droplets: Math.floor(currentAccountData.droplets),
           displayName: currentAccountInfo.Username || currentAccountInfo.name || currentAccount.displayName
         });
-        
+
         console.log(`🎯 Updated current account spotlight: ${currentAccount.displayName}`);
-        
+
+        // Check for autobuy after account is loaded
+        if (CONFIG.autoBuyToggle && Math.floor(currentAccountData.droplets) > 500) {
+          console.log(`💰 Account has ${Math.floor(currentAccountData.droplets)} droplets (>500), triggering autobuy...`);
+          try {
+            const purchaseResult = await purchase(CONFIG.autoBuy);
+            if (purchaseResult == 2) {
+              console.log('✅ Autobuy successful after account switch');
+              // Update charges after purchase
+              const updatedCharges = await WPlaceService.getCharges();
+              accountManager.updateAccountData(currentAccount.token, {
+                Charges: Math.floor(updatedCharges.charges),
+                Droplets: Math.floor(updatedCharges.droplets)
+              });
+              // Re-render account list to show updated status after purchase
+              renderAccountsList();
+            } else {
+              console.log('❌ Autobuy failed after account switch');
+            }
+          } catch (error) {
+            console.error('❌ Error during autobuy after account switch:', error);
+          }
+        } else if (CONFIG.autoBuyToggle) {
+          console.log(`💰 Account has ${Math.floor(currentAccountData.droplets)} droplets (≤500), skipping autobuy`);
+        }
+
         // Re-render the account list to show new current account
         renderAccountsList();
 
+        console.log(`🔒 PRESERVING currentActiveIndex: ${state.currentActiveIndex} (do not recalculate from isCurrent flag)`);
+        console.log(`� Account at currentActiveIndex ${state.currentActiveIndex}: ${state.originalAccountOrder[state.currentActiveIndex]?.displayName} (ID ${state.originalAccountOrder[state.currentActiveIndex]?.orderId})`);
 
+        // Update accountIndex to match original array position
+        const originalArrayIndex = state.allAccountsInfo.findIndex(acc => acc.isCurrent);
+        if (originalArrayIndex !== -1) {
+          state.accountIndex = originalArrayIndex;
+        }
 
-          
+        console.log(`📊 Final state: activeIndex=${state.currentActiveIndex}, accountIndex=${state.accountIndex}, orderId=${newCurrentAccount.orderId}`);
 
-          console.log(`🔒 PRESERVING currentActiveIndex: ${state.currentActiveIndex} (do not recalculate from isCurrent flag)`);
-          console.log(`� Account at currentActiveIndex ${state.currentActiveIndex}: ${state.originalAccountOrder[state.currentActiveIndex]?.displayName} (ID ${state.originalAccountOrder[state.currentActiveIndex]?.orderId})`);
-          
-          // Update accountIndex to match original array position
-          const originalArrayIndex = state.allAccountsInfo.findIndex(acc => acc.isCurrent);
-          if (originalArrayIndex !== -1) {
-            state.accountIndex = originalArrayIndex;
-          }
-          
-          console.log(`📊 Final state: activeIndex=${state.currentActiveIndex}, accountIndex=${state.accountIndex}, orderId=${newCurrentAccount.orderId}`);
-        
         console.warn(`⚠️ Could not find account ID ${newCurrentAccount.orderId} in switching order`);
-        
+
         console.warn(`⚠️ Could not find switched account with ID ${currentAccountData.id} in account list`);
       }
 
@@ -8416,15 +10088,15 @@ function getText(key, params) {
     if (!accountsListArea) return;
 
     accountsListArea.innerHTML = '';
-    
+
     const accounts = accountManager.getAllAccounts();
     console.log(`🔍 [RENDER] Rendering ${accounts.length} accounts`);
-    
+
     // Debug: Log account data to see what we're working with
     accounts.forEach((account, index) => {
       console.log(`📊 [RENDER] Account ${index + 1}: ${account.displayName} - ⚡${account.Charges}/${account.Max} 💧${account.Droplets} ${account.isCurrent ? '(CURRENT)' : ''}`);
     });
-    
+
     if (accounts.length === 0) {
       // Don't show any placeholder - just leave empty
       console.log(`📝 [RENDER] No accounts to display`);
@@ -8435,32 +10107,32 @@ function getText(key, params) {
       const item = createAccountItem(account, index);
       accountsListArea.appendChild(item);
     });
-    
+
     console.log(`✅ [RENDER] Successfully rendered ${accounts.length} accounts`);
   }
 
   function createAccountItem(account, index) {
     const item = document.createElement('div');
-    
+
     // Determine if this is the current account
     const isCurrentAccount = account.isCurrent;
-    const isNextInSequence = accountManager.currentIndex !== -1 && 
+    const isNextInSequence = accountManager.currentIndex !== -1 &&
       ((accountManager.currentIndex + 1) % accountManager.getAccountCount()) === index;
-    
+
     let itemClasses = 'wplace-account-item';
     if (isCurrentAccount) {
       itemClasses += ' current';
     } else if (isNextInSequence) {
       itemClasses += ' next-in-sequence';
     }
-    
+
     item.className = itemClasses;
 
     // Create ordering number element with 1-based index for user display
     const orderNumber = document.createElement('div');
     orderNumber.className = 'wplace-account-number';
     orderNumber.textContent = index + 1; // Show 1-based index for user-friendly display
-    
+
     // Add visual indicator for current position in sequence
     if (isCurrentAccount) {
       orderNumber.style.background = '#2ecc71'; // Green color
@@ -8475,29 +10147,29 @@ function getText(key, params) {
     // Create account details
     const details = document.createElement('div');
     details.className = 'wplace-account-details';
-    
+
     const accountName = document.createElement('div');
     accountName.className = 'wplace-account-name';
     const displayName = account.displayName || account.name || `Account ${index + 1}`;
     accountName.textContent = displayName;
     accountName.title = displayName;
-    
+
     const accountStats = document.createElement('div');
     accountStats.className = 'wplace-account-stats';
-    
+
     // Safely handle undefined values
     const charges = account.Charges !== undefined ? Math.floor(account.Charges) : 0;
     const max = account.Max !== undefined ? Math.floor(account.Max) : 0;
     const droplets = account.Droplets !== undefined ? Math.floor(account.Droplets) : 0;
-    
+
     accountStats.innerHTML = `
       <span><i class="fas fa-bolt"></i> ${charges}/${max}</span>
       <span><i class="fas fa-tint"></i> ${droplets}</span>
     `;
-    
+
     details.appendChild(accountName);
     details.appendChild(accountStats);
-    
+
     // Add status indicators
     const status = document.createElement('div');
     status.className = 'wplace-account-status';
@@ -8506,53 +10178,56 @@ function getText(key, params) {
     } else if (isNextInSequence) {
       status.innerHTML = '<i class="fas fa-arrow-right" style="color: #f39c12;" title="Next Account"></i>';
     }
-    
+
     item.appendChild(orderNumber);
     item.appendChild(details);
     item.appendChild(status);
-    
+
     return item;
   }
 
   // SIMPLIFIED ACCOUNT SWITCHING
   async function switchToNextAccount(accounts) {
     console.log(`🔄 [SWITCH] Starting account switch`);
-    
+
     // Validate we have accounts
     if (accountManager.getAccountCount() === 0) {
       console.error('❌ No accounts available for switching');
       return false;
     }
-    
+
     // Get next account using simplified manager
     const nextAccount = accountManager.switchToNext();
     if (!nextAccount) {
       console.error('❌ Failed to get next account');
       return false;
     }
-    
+
     console.log(`🎯 [SWITCH] Switching to: ${nextAccount.displayName} (index ${accountManager.currentIndex})`);
-    
+
     // Ensure token exists
     if (!nextAccount.token) {
       console.error(`❌ Missing token for account: ${nextAccount.displayName}`);
       return false;
     }
-    
+
     console.log(`� [SWITCH] Using token: ${nextAccount.token.substring(0, 20)}...`);
-    
+
     // Perform the account switch
     try {
       await swapAccountTrigger(nextAccount.token);
-      
+
       // Update account index for backward compatibility
       state.accountIndex = accountManager.currentIndex;
-      
+
       console.log(`✅ [SWITCH] Successfully switched to ${nextAccount.displayName}`);
+
+      // Wait a moment for the switch to fully complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Re-render the accounts list
-      renderAccountsList();
-      
+      // Update the account status and UI after successful switch
+      await updateCurrentAccountSpotlight();
+
       return true;
     } catch (error) {
       console.error('❌ [SWITCH] Account switch failed:', error);
@@ -8573,7 +10248,7 @@ function getText(key, params) {
 
     while (!swapSuccess && retryCount < maxRetries) {
       console.log(`⏳ [SPECIFIC SWITCH] Waiting for account swap... (Attempt ${retryCount + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      //await new Promise(resolve => setTimeout(resolve, 1000));
 
       try {
         await fetchAccount();
@@ -8601,6 +10276,9 @@ function getText(key, params) {
 
       // Update account data in manager
       accountManager.updateAccountData({ charges, cooldown });
+
+      // Update the account status and UI after successful switch
+      await updateCurrentAccountSpotlight();
 
       console.log(`✅ [SPECIFIC SWITCH] Successfully switched to ${accountName} with ${Math.floor(charges)} charges`);
       return true;
